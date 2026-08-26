@@ -563,12 +563,34 @@ function ProductSheet({
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-[10px] text-white transition hover:bg-white/20"
+            className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-[10px] text-white transition hover:bg-white/20"
             style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}
           >
             ✕
           </button>
-          <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+          {gallery.length > 1 && (
+            <>
+              <button
+                type="button"
+                aria-label="Anterior"
+                onClick={() => setIndex((index - 1 + gallery.length) % gallery.length)}
+                className="absolute left-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[22px] text-white transition hover:scale-105"
+                style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)" }}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                aria-label="Próximo"
+                onClick={() => setIndex((index + 1) % gallery.length)}
+                className="absolute right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[22px] text-white transition hover:scale-105"
+                style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)" }}
+              >
+                ›
+              </button>
+            </>
+          )}
+          <div className="absolute bottom-3 left-0 right-0 z-10 flex justify-center gap-1.5">
             {gallery.map((item, i) => (
               <button
                 type="button"

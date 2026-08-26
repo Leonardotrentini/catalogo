@@ -16,7 +16,7 @@ function ColorField({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="relative rounded-[10px] border border-[rgba(255,255,255,0.06)] bg-[#141416] p-3">
+    <div className="relative rounded-[10px] border border-[rgba(201,168,76,0.14)] bg-[#0F281F] p-3">
       <div className="mb-2 text-[12px] text-[#999]">{label}</div>
       <div className="relative h-10 w-10">
         <div
@@ -111,7 +111,7 @@ export function BrandTab({
               const file = e.dataTransfer.files[0];
               if (file) void handleLogo(file);
             }}
-            className="flex h-[120px] w-full flex-col items-center justify-center rounded-[14px] border border-dashed border-[#2a2a2e] bg-[#141416]"
+            className="flex h-[120px] w-full flex-col items-center justify-center rounded-[14px] border border-dashed border-[#1E3A2E] bg-[#0F281F]"
           >
             {brand.logo ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -185,7 +185,7 @@ export function BrandTab({
                 const file = e.dataTransfer.files[0];
                 if (file) void handleBanner(file);
               }}
-              className="flex h-[120px] w-full flex-col items-center justify-center rounded-[14px] border border-dashed border-[#2a2a2e] bg-[#141416]"
+              className="flex h-[120px] w-full flex-col items-center justify-center rounded-[14px] border border-dashed border-[#1E3A2E] bg-[#0F281F]"
             >
               <span className="text-[13px] text-[#999]">Arraste o banner ou clique para selecionar</span>
               <span className="mt-1 text-[11px] text-[#555]">1200×400px recomendado</span>

@@ -56,10 +56,10 @@ export async function extractColorsFromDataUrl(dataUrl: string): Promise<string[
 export function mapExtractedToBrand(hexes: string[]): BrandColors {
   if (hexes.length === 0) {
     return {
-      primary: "#0f0f11",
+      primary: "#0A1F18",
       accent: "#C9A84C",
       text: "#ffffff",
-      card: "#1a1a1e",
+      card: "#122E23",
     };
   }
 

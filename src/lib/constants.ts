@@ -33,10 +33,10 @@ export const DEFAULT_CATEGORIES = [
 ];
 
 export const DEFAULT_COLORS: BrandColors = {
-  primary: "#0f0f11",
+  primary: "#0A1F18",
   accent: "#C9A84C",
   text: "#ffffff",
-  card: "#1a1a1e",
+  card: "#122E23",
 };
 
 export const DEFAULT_BRAND: Brand = {

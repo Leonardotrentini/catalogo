@@ -1,17 +1,17 @@
-export function VestoLogo({ size = 28 }: { size?: number }) {
+export function VestoLogo({ size = 40 }: { size?: number }) {
   return (
-    <div
-      className="flex items-center justify-center font-bold text-white shrink-0"
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/vesto-logo.jpg"
+      alt="Vesto Catálogo"
+      width={size}
+      height={size}
+      className="shrink-0 rounded-[10px] object-cover"
       style={{
         width: size,
         height: size,
-        borderRadius: 8,
-        fontSize: size * 0.5,
-        background: "linear-gradient(135deg, #0D4726 0%, #C9A84C 100%)",
+        boxShadow: "0 0 0 1px rgba(201,168,76,0.25)",
       }}
-      aria-hidden
-    >
-      V
-    </div>
+    />
   );
 }

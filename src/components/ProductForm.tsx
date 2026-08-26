@@ -28,7 +28,7 @@ export function ProductForm({
 }: {
   initial: Product | null;
   categories: string[];
-  onSave: (product: Omit<Product, "id"> & { id?: number }) => void;
+  onSave: (product: Omit<Product, "id"> & { id?: number }) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const [form, setForm] = useState(() =>
@@ -51,6 +51,7 @@ export function ProductForm({
   const [selectedPhoto, setSelectedPhoto] = useState<number | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<number | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragVideoIndex, setDragVideoIndex] = useState<number | null>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
   const canSave = Boolean(form.name.trim() && form.category.trim());
@@ -108,26 +109,8 @@ export function ProductForm({
     }));
   }
 
-  function makeImageCover(index: number) {
-    setForm((prev) => ({
-      ...prev,
-      coverType: "image",
-      images: reorder(prev.images, index, 0),
-    }));
-    setSelectedPhoto(0);
-  }
-
-  function makeVideoCover(index: number) {
-    setForm((prev) => ({
-      ...prev,
-      coverType: "video",
-      videos: reorder(prev.videos, index, 0),
-    }));
-    setSelectedVideo(0);
-  }
-
   return (
-    <div className="rounded-[14px] border border-[rgba(255,255,255,0.06)] bg-[#141416] p-4">
+    <div className="rounded-[14px] border border-[rgba(201,168,76,0.14)] bg-[#0F281F] p-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="field-label">Nome</span>
@@ -219,7 +202,7 @@ export function ProductForm({
       </div>
 
       <div className="mt-4">
-        <div className="field-label">Fotos do produto · clique para selecionar · arraste para reordenar</div>
+        <div className="field-label">Fotos do produto · clique para selecionar · arraste para definir a ordem (1ª = capa)</div>
         <input
           ref={photoRef}
           type="file"
@@ -237,93 +220,56 @@ export function ProductForm({
             const isCover = !videoCover && i === 0;
             return (
               <div key={`${img.src}-${i}`} className="w-[88px]">
-                <button
-                  type="button"
-                  draggable
-                  onDragStart={() => setDragIndex(i)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    if (dragIndex === null) return;
-                    setForm((prev) => ({ ...prev, images: reorder(prev.images, dragIndex, i) }));
-                    setSelectedPhoto(i);
-                    setDragIndex(null);
-                  }}
-                  onClick={() => setSelectedPhoto(i)}
-                  className="relative h-[88px] w-[88px] overflow-hidden rounded-[8px] transition hover:scale-[1.03] active:scale-95"
-                  style={{
-                    outline: selected ? "2px solid #C9A84C" : "2px solid #2a2a2e",
-                    outlineOffset: 2,
-                    opacity: selected ? 1 : 0.92,
-                  }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.src} alt="" className="h-full w-full object-cover" />
-                  {isCover && (
-                    <span className="absolute left-1 top-1 rounded bg-[#C9A84C] px-1 text-[8px] font-bold text-black">
-                      CAPA
-                    </span>
-                  )}
-                  {img.color && (
-                    <span
-                      className="absolute bottom-1 left-1 h-3 w-3 rounded-full border border-white/40"
-                      style={{ background: img.color }}
-                    />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForm((prev) => ({ ...prev, images: prev.images.filter((_, idx) => idx !== i) }));
-                    setSelectedPhoto(null);
-                  }}
-                  className="absolute hidden"
-                  aria-label="Remover foto"
-                />
-                <div className="mt-1 flex items-center justify-between gap-1">
+                <div className="relative">
                   <button
                     type="button"
-                    disabled={i === 0}
-                    onClick={() => {
-                      setForm((prev) => ({ ...prev, images: reorder(prev.images, i, i - 1) }));
-                      setSelectedPhoto(Math.max(0, i - 1));
+                    draggable
+                    onDragStart={() => setDragIndex(i)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => {
+                      if (dragIndex === null) return;
+                      setForm((prev) => ({
+                        ...prev,
+                        coverType: "image",
+                        images: reorder(prev.images, dragIndex, i),
+                      }));
+                      setSelectedPhoto(i);
+                      setDragIndex(null);
                     }}
-                    className="flex h-8 w-8 items-center justify-center rounded-md border border-[#2a2a2e] text-[12px] hover:border-[#C9A84C] disabled:opacity-30"
-                  >
-                    ←
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => makeImageCover(i)}
-                    className="h-8 flex-1 rounded-md border text-[9px] font-bold uppercase hover:border-[#C9A84C]"
+                    onClick={() => setSelectedPhoto(i)}
+                    className="relative h-[88px] w-[88px] cursor-grab overflow-hidden rounded-[8px] transition hover:scale-[1.03] active:scale-95 active:cursor-grabbing"
                     style={{
-                      borderColor: isCover ? "#C9A84C" : "#2a2a2e",
-                      color: isCover ? "#C9A84C" : "#999",
+                      outline: selected || isCover ? "2px solid #C9A84C" : "2px solid #2a2a2e",
+                      outlineOffset: 2,
+                      opacity: selected ? 1 : 0.92,
                     }}
                   >
-                    Capa
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img.src} alt="" className="pointer-events-none h-full w-full object-cover" />
+                    {isCover && (
+                      <span className="absolute left-1 top-1 rounded bg-[#C9A84C] px-1 text-[8px] font-bold text-black">
+                        CAPA
+                      </span>
+                    )}
+                    {img.color && (
+                      <span
+                        className="absolute bottom-1 left-1 h-3 w-3 rounded-full border border-white/40"
+                        style={{ background: img.color }}
+                      />
+                    )}
                   </button>
                   <button
                     type="button"
-                    disabled={i === form.images.length - 1}
                     onClick={() => {
-                      setForm((prev) => ({ ...prev, images: reorder(prev.images, i, i + 1) }));
-                      setSelectedPhoto(Math.min(form.images.length - 1, i + 1));
+                      setForm((prev) => ({ ...prev, images: prev.images.filter((_, idx) => idx !== i) }));
+                      setSelectedPhoto(null);
                     }}
-                    className="flex h-8 w-8 items-center justify-center rounded-md border border-[#2a2a2e] text-[12px] hover:border-[#C9A84C] disabled:opacity-30"
+                    className="absolute -right-1 -top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/85 text-[11px] text-white hover:bg-[#ef4444]"
+                    aria-label="Remover foto"
                   >
-                    →
+                    ✕
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForm((prev) => ({ ...prev, images: prev.images.filter((_, idx) => idx !== i) }));
-                    setSelectedPhoto(null);
-                  }}
-                  className="mt-1 h-8 w-full rounded-md border border-[#2a2a2e] text-[11px] text-[#ef4444] hover:border-[#ef4444]"
-                >
-                  Remover
-                </button>
                 {form.colors.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {form.colors.map((hex) => {
@@ -371,7 +317,7 @@ export function ProductForm({
       </div>
 
       <div className="mt-4">
-        <div className="field-label">Vídeos · o primeiro vídeo vira capa automaticamente</div>
+        <div className="field-label">Vídeos · clique para selecionar · arraste para reordenar (1º = capa)</div>
         <div className="flex gap-2">
           <input
             className="field-input"
@@ -418,15 +364,31 @@ export function ProductForm({
             return (
               <div
                 key={`${video.src}-${i}`}
-                onClick={() => setSelectedVideo(i)}
-                className="flex cursor-pointer items-center gap-2 rounded-[10px] p-2 transition hover:bg-white/5"
+                draggable
+                onDragStart={() => setDragVideoIndex(i)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => {
+                  if (dragVideoIndex === null) return;
+                  setForm((prev) => ({
+                    ...prev,
+                    coverType: "video",
+                    videos: reorder(prev.videos, dragVideoIndex, i),
+                  }));
+                  setSelectedVideo(i);
+                  setDragVideoIndex(null);
+                }}
+                onClick={() => {
+                  setSelectedVideo(i);
+                  setForm((prev) => ({ ...prev, coverType: "video" }));
+                }}
+                className="flex cursor-grab items-center gap-2 rounded-[10px] p-2 transition hover:bg-white/5 active:cursor-grabbing"
                 style={{
                   border: selected || isCover ? "1px solid #C9A84C" : "1px solid rgba(255,255,255,0.06)",
                   background: selected ? "#C9A84C14" : "transparent",
                 }}
               >
                 {video.type === "file" ? (
-                  <video src={video.src} className="h-10 w-10 rounded object-cover" muted />
+                  <video src={video.src} className="pointer-events-none h-10 w-10 rounded object-cover" muted />
                 ) : (
                   <div className="flex h-10 w-10 items-center justify-center rounded bg-[#1a2744] text-[10px] text-[#60a5fa]">
                     URL
@@ -443,27 +405,13 @@ export function ProductForm({
                   {video.type === "file" ? "MP4" : "URL"}
                 </span>
                 {isCover && (
-                  <span className="rounded bg-[#C9A84C] px-1.5 py-0.5 text-[8px] font-bold text-black">
+                  <span className="shrink-0 rounded-[3px] bg-[#C9A84C] px-2.5 py-1 text-[11px] font-black leading-none tracking-[0.12em] text-black">
                     CAPA
                   </span>
                 )}
                 <span className="min-w-0 flex-1 truncate text-[12px] text-[#999]">
                   {video.name ?? video.src}
                 </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    makeVideoCover(i);
-                  }}
-                  className="h-9 rounded-md border px-2 text-[10px] font-bold uppercase hover:border-[#C9A84C]"
-                  style={{
-                    borderColor: isCover ? "#C9A84C" : "#2a2a2e",
-                    color: isCover ? "#C9A84C" : "#999",
-                  }}
-                >
-                  Capa
-                </button>
                 <button
                   type="button"
                   onClick={(e) => {
@@ -502,8 +450,8 @@ export function ProductForm({
         <button
           type="button"
           disabled={!canSave}
-          onClick={() =>
-            onSave({
+          onClick={() => {
+            void onSave({
               id: initial?.id,
               name: form.name.trim(),
               category: form.category.trim(),
@@ -519,8 +467,8 @@ export function ProductForm({
               description: form.description,
               coverType:
                 form.videos.length === 0 ? "image" : (form.coverType ?? "video"),
-            })
-          }
+            });
+          }}
           className="h-11 rounded-[10px] bg-[#C9A84C] px-5 text-[14px] font-semibold text-black disabled:opacity-40"
         >
           {initial ? "Salvar" : "Adicionar"}

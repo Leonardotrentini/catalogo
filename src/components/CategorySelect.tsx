@@ -64,7 +64,7 @@ export function CategorySelect({
         }}
       />
       {open && (
-        <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-[12px] border border-[#2a2a2e] bg-[#141416] py-1 shadow-xl">
+        <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-[12px] border border-[#1E3A2E] bg-[#0F281F] py-1 shadow-xl">
           {filtered.map((c) => (
             <button
               type="button"

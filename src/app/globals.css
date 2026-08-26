@@ -1,19 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --bg-app: #0a0a0c;
-  --bg-primary: #0f0f11;
-  --bg-card: #1a1a1e;
-  --bg-elevated: #141416;
+  --bg-app: #0a1f18;
+  --bg-primary: #0d261c;
+  --bg-card: #122e23;
+  --bg-elevated: #0f281f;
   --accent: #c9a84c;
   --accent-soft: #c9a84c22;
   --text-primary: #ffffff;
-  --text-secondary: #999999;
-  --text-muted: #555555;
+  --text-secondary: #a8b5ae;
+  --text-muted: #6b7a72;
   --success: #25d366;
   --danger: #ef4444;
-  --border: rgba(255, 255, 255, 0.06);
-  --border-visible: #2a2a2e;
+  --border: rgba(201, 168, 76, 0.12);
+  --border-visible: #1e3a2e;
 }
 
 * {
@@ -96,8 +96,8 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 
 .field-input {
   width: 100%;
-  background: #141416;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #0f281f;
+  border: 1px solid rgba(201, 168, 76, 0.14);
   border-radius: 10px;
   padding: 12px 14px;
   color: #fff;
@@ -107,7 +107,7 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 }
 
 .field-input::placeholder {
-  color: #555;
+  color: #6b7a72;
 }
 
 .field-input:focus {
@@ -118,6 +118,6 @@ input[type="color"]::-webkit-color-swatch-wrapper {
   display: block;
   font-size: 12px;
   font-weight: 500;
-  color: #999;
+  color: #a8b5ae;
   margin-bottom: 8px;
 }
