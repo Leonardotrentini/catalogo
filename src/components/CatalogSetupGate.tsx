@@ -1,19 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
 import Link from "next/link";
 import { VestoLogo } from "@/components/VestoLogo";
+import { tenantPanelLoginUrl } from "@/lib/hosts";
 
 export function CatalogSetupGate({ slug }: { slug: string }) {
-  const loginHref = useMemo(() => {
-    if (typeof window !== "undefined") {
-      const host = window.location.hostname;
-      if (host === "localhost" || host === "127.0.0.1") {
-        return `/login?slug=${encodeURIComponent(slug)}`;
-      }
-    }
-    return "/login";
-  }, [slug]);
+  const loginHref = tenantPanelLoginUrl(slug);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#0A1F18] px-6 text-center text-white">

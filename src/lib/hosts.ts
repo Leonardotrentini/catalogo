@@ -4,6 +4,16 @@ export function getRootDomain(): string {
   return process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() || DEFAULT_ROOT_DOMAIN;
 }
 
+export function getAppOrigin(): string {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      return `${window.location.protocol}//${host}:${window.location.port || "3000"}`;
+    }
+  }
+  return `https://${getRootDomain()}`;
+}
+
 /** Extrai o slug do subdomínio (ex.: baseset.catalogo.vercel.app → baseset). */
 export function getCatalogSlugFromHost(host: string): string | null {
   const hostname = host.split(":")[0].toLowerCase();
@@ -26,25 +36,14 @@ export function getCatalogSlugFromHost(host: string): string | null {
   return null;
 }
 
+/** Catálogo público — usa rota /catalog/slug no domínio principal (funciona sem wildcard). */
 export function catalogPublicUrl(slug: string): string {
-  const clean = slug.trim() || "loja";
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host === "localhost" || host === "127.0.0.1") {
-      return `${window.location.protocol}//${host}:${window.location.port || "3000"}/catalog/${clean}`;
-    }
-  }
-  return `https://${clean}.${getRootDomain()}`;
+  const clean = slug.trim().toLowerCase() || "loja";
+  return `${getAppOrigin()}/catalog/${clean}`;
 }
 
-/** URL de login do painel do lojista (subdomínio ou rota /login). */
+/** Login do lojista — usa /login?slug= no domínio principal (funciona sem wildcard). */
 export function tenantPanelLoginUrl(slug: string): string {
   const clean = slug.trim().toLowerCase() || "loja";
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host === "localhost" || host === "127.0.0.1") {
-      return `${window.location.protocol}//${host}:${window.location.port || "3000"}/login?slug=${encodeURIComponent(clean)}`;
-    }
-  }
-  return `https://${clean}.${getRootDomain()}/login`;
+  return `${getAppOrigin()}/login?slug=${encodeURIComponent(clean)}`;
 }
