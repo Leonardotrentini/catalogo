@@ -36,3 +36,15 @@ export function catalogPublicUrl(slug: string): string {
   }
   return `https://${clean}.${getRootDomain()}`;
 }
+
+/** URL de login do painel do lojista (subdomínio ou rota /login). */
+export function tenantPanelLoginUrl(slug: string): string {
+  const clean = slug.trim().toLowerCase() || "loja";
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      return `${window.location.protocol}//${host}:${window.location.port || "3000"}/login?slug=${encodeURIComponent(clean)}`;
+    }
+  }
+  return `https://${clean}.${getRootDomain()}/login`;
+}

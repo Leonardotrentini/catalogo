@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Profile } from "@/lib/types";
-import { catalogPublicUrl } from "@/lib/hosts";
+import { catalogPublicUrl, tenantPanelLoginUrl } from "@/lib/hosts";
 import { VestoLogo } from "@/components/VestoLogo";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
@@ -51,13 +51,14 @@ export function SuperAdminPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, fullName, catalogSlug, role: "tenant" }),
       });
+      const slug = catalogSlug.trim().toLowerCase();
       const body = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(body.error ?? "Erro ao criar usuário");
       setEmail("");
       setPassword("");
       setFullName("");
       setCatalogSlug("");
-      setMessage("Usuário criado com sucesso.");
+      setMessage(`Usuário criado! Painel: ${tenantPanelLoginUrl(slug)}`);
       await loadUsers();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Erro");
@@ -78,7 +79,7 @@ export function SuperAdminPanel() {
   async function handleLogout() {
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
-    router.replace("/admin/login");
+    router.replace("/login");
   }
 
   return (
@@ -153,7 +154,9 @@ export function SuperAdminPanel() {
               />
               {catalogSlug.trim() && (
                 <span className="mt-1 block text-[11px] text-[#6B7A72]">
-                  URL: {catalogPublicUrl(catalogSlug.trim().toLowerCase())}
+                  Catálogo público: {catalogPublicUrl(catalogSlug.trim().toLowerCase())}
+                  <br />
+                  Login do lojista: {tenantPanelLoginUrl(catalogSlug.trim().toLowerCase())}
                 </span>
               )}
             </label>
@@ -182,7 +185,8 @@ export function SuperAdminPanel() {
                     <th className="px-4 py-3 font-medium">E-mail</th>
                     <th className="px-4 py-3 font-medium">Nome</th>
                     <th className="px-4 py-3 font-medium">Papel</th>
-                    <th className="px-4 py-3 font-medium">Catálogo</th>
+                    <th className="px-4 py-3 font-medium">Catálogo público</th>
+                    <th className="px-4 py-3 font-medium">Painel (login)</th>
                     <th className="px-4 py-3 font-medium">Status</th>
                     <th className="px-4 py-3 font-medium" />
                   </tr>
@@ -202,6 +206,20 @@ export function SuperAdminPanel() {
                             className="text-[#C9A84C] underline"
                           >
                             {user.catalog_slug}
+                          </a>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {user.catalog_slug ? (
+                          <a
+                            href={tenantPanelLoginUrl(user.catalog_slug)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[#C9A84C] underline"
+                          >
+                            Entrar
                           </a>
                         ) : (
                           "—"

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { CatalogPreview } from "@/components/catalog/CatalogPreview";
+import { CatalogSetupGate } from "@/components/CatalogSetupGate";
 import { loadPublishedCatalog } from "@/lib/supabase/catalog-server";
 import type { Metadata } from "next";
 
@@ -19,7 +20,9 @@ export default async function PublicCatalogPage({ params }: Props) {
   const { slug } = await params;
   const data = await loadPublishedCatalog(slug);
 
-  if (!data) notFound();
+  if (!data) {
+    return <CatalogSetupGate slug={slug} />;
+  }
 
   return (
     <div className="min-h-screen" style={{ background: data.colors.primary }}>

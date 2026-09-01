@@ -24,7 +24,7 @@ export function AdminShell() {
         } = await supabase.auth.getUser();
 
         if (!user) {
-          router.replace("/admin/login");
+          router.replace("/login");
           return;
         }
 
@@ -63,7 +63,7 @@ export function AdminShell() {
   async function handleLogout() {
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
-    router.replace("/admin/login");
+    router.replace("/login");
   }
 
   if (loading) {
@@ -81,7 +81,7 @@ export function AdminShell() {
         <p className="text-[16px] font-semibold text-[#ef4444]">{error ?? "Sessão inválida"}</p>
         <button
           type="button"
-          onClick={() => router.push("/admin/login")}
+          onClick={() => router.push("/login")}
           className="rounded-[10px] bg-[#C9A84C] px-4 py-2 text-[14px] font-semibold text-[#0A1F18]"
         >
           Ir para login

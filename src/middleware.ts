@@ -11,14 +11,15 @@ export async function middleware(request: NextRequest) {
     slug &&
     !pathname.startsWith("/api") &&
     !pathname.startsWith("/admin") &&
-    !pathname.startsWith("/auth")
+    !pathname.startsWith("/auth") &&
+    !pathname.startsWith("/login")
   ) {
     const url = request.nextUrl.clone();
     url.pathname = `/catalog/${slug}`;
     return NextResponse.rewrite(url);
   }
 
-  if (pathname.startsWith("/admin")) {
+  if (pathname.startsWith("/admin") || pathname === "/login") {
     return updateSession(request);
   }
 

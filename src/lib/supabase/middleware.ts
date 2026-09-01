@@ -29,12 +29,13 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isLogin = pathname.startsWith("/admin/login");
-  const isAdmin = pathname.startsWith("/admin");
+  const isLogin = pathname === "/login" || pathname.startsWith("/admin/login");
+  const isProtected =
+    pathname.startsWith("/admin") && !pathname.startsWith("/admin/login");
 
-  if (isAdmin && !isLogin && !user) {
+  if (isProtected && !user) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/admin/login";
+    redirectUrl.pathname = "/login";
     return NextResponse.redirect(redirectUrl);
   }
 
