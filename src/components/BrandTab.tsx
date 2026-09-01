@@ -4,6 +4,7 @@ import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Brand, BrandColors } from "@/lib/types";
 import { extractColorsFromDataUrl, mapExtractedToBrand } from "@/lib/extractColors";
 import { readAsDataURL } from "@/lib/utils";
+import { HighlightsEditor } from "./HighlightsEditor";
 import { getYoutubeEmbedUrl } from "@/lib/youtube";
 
 function ColorField({
@@ -243,6 +244,39 @@ export function BrandTab({
             onChange={(e) => setBrand((prev) => ({ ...prev, cnpj: e.target.value }))}
           />
         </label>
+
+        <HighlightsEditor brand={brand} setBrand={setBrand} colors={colors} />
+
+        <section>
+          <h2 className="mb-1 text-[15px] font-bold">Botão principal</h2>
+          <p className="mb-3 text-[12px] text-[#6B7A72]">
+            Texto e cor do botão &quot;Finalizar pedido&quot; na home do catálogo.
+          </p>
+          <div className="space-y-3 rounded-[12px] border border-[#1E3A2E] bg-[#0A1F18] p-3">
+            <label className="block">
+              <span className="field-label">Texto do botão</span>
+              <input
+                className="field-input"
+                placeholder="Finalizar pedido"
+                value={brand.checkoutButtonText ?? ""}
+                onChange={(e) =>
+                  setBrand((prev) => ({ ...prev, checkoutButtonText: e.target.value }))
+                }
+              />
+            </label>
+            <ColorField
+              label="Cor do botão"
+              value={brand.checkoutButtonColor ?? "#25D366"}
+              onChange={(v) => setBrand((prev) => ({ ...prev, checkoutButtonColor: v }))}
+            />
+            <div
+              className="flex h-12 items-center justify-center rounded-[12px] text-[14px] font-semibold text-white"
+              style={{ background: brand.checkoutButtonColor ?? "#25D366" }}
+            >
+              {brand.checkoutButtonText?.trim() || "Finalizar pedido"}
+            </div>
+          </div>
+        </section>
 
         <section>
           <h2 className="mb-3 text-[15px] font-bold">Cores da marca</h2>

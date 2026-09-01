@@ -1,4 +1,5 @@
 import type { Brand, BrandColors, Product } from "./types";
+import { defaultHighlights } from "./highlights";
 
 export const PRODUCT_COLORS = [
   { name: "Preto", hex: "#1a1a1a" },
@@ -32,6 +33,24 @@ export const DEFAULT_CATEGORIES = [
   "Acessórios",
 ];
 
+export const DEFAULT_SIZES = [
+  "PP",
+  "P",
+  "M",
+  "G",
+  "GG",
+  "XG",
+  "XXG",
+  "36",
+  "38",
+  "40",
+  "42",
+  "44",
+  "46",
+  "48",
+  "Único",
+];
+
 export const DEFAULT_COLORS: BrandColors = {
   primary: "#0A1F18",
   accent: "#C9A84C",
@@ -47,6 +66,10 @@ export const DEFAULT_BRAND: Brand = {
   whatsapp: "",
   instagram: "",
   cnpj: "",
+  highlights: defaultHighlights(),
+  highlightStyle: "pill",
+  checkoutButtonText: "Finalizar pedido",
+  checkoutButtonColor: "#25D366",
 };
 
 export const demoProducts: Product[] = [

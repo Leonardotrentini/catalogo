@@ -1,5 +1,5 @@
-import { AdminApp } from "@/components/AdminApp";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <AdminApp />;
+  redirect("/admin");
 }

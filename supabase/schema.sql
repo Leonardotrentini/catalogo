@@ -25,6 +25,7 @@ create table if not exists public.products (
   videos jsonb not null default '[]'::jsonb,
   description text not null default '',
   cover_type text check (cover_type is null or cover_type in ('video', 'image')),
+  volume_discounts jsonb not null default '[]'::jsonb,
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

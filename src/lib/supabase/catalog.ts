@@ -1,8 +1,21 @@
 import { DEFAULT_BRAND, DEFAULT_COLORS } from "@/lib/constants";
+import { normalizeHighlightStyle, normalizeHighlights } from "@/lib/highlights";
+import { normalizeVolumeDiscounts } from "@/lib/pricing";
 import type { Brand, BrandColors, Product, ProductImage, VideoItem } from "@/lib/types";
 import { getSupabase } from "./client";
 
 export const DEFAULT_CATALOG_SLUG = "default";
+
+function normalizeBrand(raw: Partial<Brand> | null | undefined): Brand {
+  const merged = { ...DEFAULT_BRAND, ...(raw ?? {}) };
+  return {
+    ...merged,
+    highlights: normalizeHighlights(merged.highlights),
+    highlightStyle: normalizeHighlightStyle(merged.highlightStyle),
+    checkoutButtonText: merged.checkoutButtonText?.trim() || DEFAULT_BRAND.checkoutButtonText,
+    checkoutButtonColor: merged.checkoutButtonColor?.trim() || DEFAULT_BRAND.checkoutButtonColor,
+  };
+}
 
 type CatalogRow = {
   id: string;
@@ -25,6 +38,7 @@ type ProductRow = {
   videos: VideoItem[] | null;
   description: string;
   cover_type: "video" | "image" | null;
+  volume_discounts?: unknown;
   sort_order: number;
 };
 
@@ -41,11 +55,16 @@ function mapProduct(row: ProductRow): Product {
     videos: row.videos ?? [],
     description: row.description ?? "",
     coverType: row.cover_type ?? undefined,
+    volumeDiscounts: normalizeVolumeDiscounts(row.volume_discounts, row.price),
   };
 }
 
-export async function loadCatalog(slug = DEFAULT_CATALOG_SLUG): Promise<{
+export async function loadCatalog(
+  slug = DEFAULT_CATALOG_SLUG,
+  options?: { createIfMissing?: boolean; ownerId?: string },
+): Promise<{
   catalogId: string;
+  slug: string;
   brand: Brand;
   colors: BrandColors;
   products: Product[];
@@ -59,19 +78,24 @@ export async function loadCatalog(slug = DEFAULT_CATALOG_SLUG): Promise<{
 
   if (error) throw error;
 
-  if (!catalog) {
+  if (!catalog && options?.createIfMissing && options.ownerId) {
     const inserted = await getSupabase()
       .from("catalogs")
       .insert({
         slug,
         brand: DEFAULT_BRAND,
         colors: DEFAULT_COLORS,
+        owner_id: options.ownerId,
       })
       .select("id, slug, brand, colors, is_published")
       .single();
 
     if (inserted.error) throw inserted.error;
     catalog = inserted.data;
+  }
+
+  if (!catalog) {
+    throw new Error(`Catálogo "${slug}" não encontrado.`);
   }
 
   const row = catalog as CatalogRow;
@@ -87,7 +111,8 @@ export async function loadCatalog(slug = DEFAULT_CATALOG_SLUG): Promise<{
 
   return {
     catalogId: row.id,
-    brand: { ...DEFAULT_BRAND, ...(row.brand ?? {}) },
+    slug: row.slug,
+    brand: normalizeBrand(row.brand),
     colors: { ...DEFAULT_COLORS, ...(row.colors ?? {}) },
     products: (productRows as ProductRow[] | null)?.map(mapProduct) ?? [],
     isPublished: Boolean(row.is_published),
@@ -142,6 +167,7 @@ export async function upsertProduct(
     videos: product.videos,
     description: product.description,
     cover_type: product.coverType ?? null,
+    volume_discounts: normalizeVolumeDiscounts(product.volumeDiscounts, product.price),
     sort_order: sortOrder ?? 0,
     updated_at: new Date().toISOString(),
   };

@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:apply": "node scripts/db-apply.mjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",
     "next": "^15.5.2",
     "react": "^19.1.1",
@@ -19,6 +21,7 @@
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
+    "pg": "^8.23.0",
     "tailwindcss": "^4.1.12",
     "typescript": "^5.9.2"
   }

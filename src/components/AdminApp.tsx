@@ -14,7 +14,8 @@ import {
   saveBrandAndColors,
   upsertProduct,
 } from "@/lib/supabase/catalog";
-import { toSlug } from "@/lib/utils";
+import { catalogPublicUrl } from "@/lib/hosts";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 const TABS: { id: AdminTab; label: string }[] = [
   { id: "marca", label: "Marca" },
@@ -22,29 +23,50 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "preview", label: "Preview" },
 ];
 
-export function AdminApp() {
+export function AdminApp({
+  catalogSlug,
+  userEmail,
+  isSuperAdmin,
+  onLogout,
+  onOpenSuperAdmin,
+}: {
+  catalogSlug: string;
+  userEmail: string;
+  isSuperAdmin: boolean;
+  onLogout: () => void;
+  onOpenSuperAdmin: () => void;
+}) {
   const [tab, setTab] = useState<AdminTab>("marca");
   const [brand, setBrand] = useState<Brand>(DEFAULT_BRAND);
   const [colors, setColors] = useState<BrandColors>(DEFAULT_COLORS);
   const [products, setProducts] = useState<Product[]>([]);
   const [catalogId, setCatalogId] = useState<string | null>(null);
+  const [isPublished, setIsPublished] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const hydrated = useRef(false);
   const skipBrandSave = useRef(true);
-  const slug = toSlug(brand.name);
 
   useEffect(() => {
     let cancelled = false;
 
     async function boot() {
       try {
-        const data = await loadCatalog();
+        const supabase = createSupabaseBrowserClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        const data = await loadCatalog(catalogSlug, {
+          createIfMissing: true,
+          ownerId: user?.id,
+        });
         if (cancelled) return;
         skipBrandSave.current = true;
         setCatalogId(data.catalogId);
+        setIsPublished(data.isPublished);
         setBrand(data.brand);
         setColors(data.colors);
         setProducts(data.products);
@@ -63,7 +85,7 @@ export function AdminApp() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [catalogSlug]);
 
   useEffect(() => {
     if (!hydrated.current || !catalogId) return;
@@ -93,13 +115,14 @@ export function AdminApp() {
   async function publish() {
     if (!catalogId) return;
     try {
-      await publishCatalog(catalogId, slug || "default");
-      setToast(`✓ Catálogo publicado em ${slug || "loja"}.vestocatalogo.com`);
+      await publishCatalog(catalogId, catalogSlug);
+      setIsPublished(true);
+      setToast(`✓ Catálogo publicado em ${catalogPublicUrl(catalogSlug)}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao publicar";
       setToast(`✗ ${message}`);
     }
-    window.setTimeout(() => setToast(null), 4000);
+    window.setTimeout(() => setToast(null), 5000);
   }
 
   async function handleSaveProduct(data: Omit<Product, "id"> & { id?: number }) {
@@ -140,7 +163,15 @@ export function AdminApp() {
 
   return (
     <div className="min-h-screen bg-[#0A1F18] text-white">
-      <TopBar slug={slug} onPublish={publish} />
+      <TopBar
+        slug={catalogSlug}
+        isPublished={isPublished}
+        userEmail={userEmail}
+        isSuperAdmin={isSuperAdmin}
+        onPublish={publish}
+        onLogout={onLogout}
+        onOpenSuperAdmin={onOpenSuperAdmin}
+      />
 
       {toast && (
         <div className="fixed left-1/2 top-20 z-50 -translate-x-1/2 rounded-[12px] bg-[#25D366] px-4 py-3 text-[14px] font-semibold text-white shadow-lg">

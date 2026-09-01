@@ -10,6 +10,11 @@ export interface ProductImage {
   color?: string;
 }
 
+export interface VolumeDiscount {
+  minQty: number;
+  unitPrice: string;
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -22,6 +27,7 @@ export interface Product {
   videos: VideoItem[];
   description: string;
   coverType?: "video" | "image";
+  volumeDiscounts?: VolumeDiscount[];
 }
 
 export interface BrandColors {
@@ -39,6 +45,31 @@ export interface Brand {
   whatsapp: string;
   instagram: string;
   cnpj: string;
+  highlights?: BrandHighlight[];
+  highlightStyle?: HighlightStyle;
+  checkoutButtonText?: string;
+  checkoutButtonColor?: string;
+}
+
+export type HighlightStyle = "pill" | "minimal" | "outline" | "glass";
+
+export type HighlightIcon =
+  | "globe"
+  | "message"
+  | "shield"
+  | "card"
+  | "truck"
+  | "star"
+  | "package"
+  | "clock"
+  | "award"
+  | "heart";
+
+export interface BrandHighlight {
+  id: string;
+  label: string;
+  icon: HighlightIcon;
+  enabled: boolean;
 }
 
 export interface CartItem {
@@ -54,6 +85,18 @@ export interface CartItem {
 }
 
 export type AdminTab = "marca" | "produtos" | "preview";
+
+export type UserRole = "super_admin" | "tenant";
+
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  catalog_slug: string | null;
+  is_active: boolean;
+  created_at?: string;
+}
 
 export interface GalleryItem {
   kind: "image" | "video";

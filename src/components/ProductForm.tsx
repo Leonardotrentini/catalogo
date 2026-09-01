@@ -2,32 +2,47 @@
 
 import { useRef, useState } from "react";
 import { CategorySelect } from "./CategorySelect";
-import { PRODUCT_COLORS } from "@/lib/constants";
+import { ColorSelect } from "./ColorSelect";
+import { SizeSelect } from "./SizeSelect";
 import { normalizeImages, prefersVideoCover, reorder } from "@/lib/media";
-import type { Product, ProductImage, VideoItem } from "@/lib/types";
-import { colorNameFromHex, isLightHex, readAsDataURL } from "@/lib/utils";
+import {
+  PRODUCT_PHOTO_GUIDE,
+  PRODUCT_VIDEO_GUIDE,
+  getImageDimensions,
+  getVideoDimensions,
+  productPhotoUploadTip,
+  productVideoUploadTip,
+} from "@/lib/mediaGuide";
+import type { Product, ProductImage, VideoItem, VolumeDiscount } from "@/lib/types";
+import { normalizeVolumeDiscounts } from "@/lib/pricing";
+import { colorNameFromHex, parsePrice, readAsDataURL } from "@/lib/utils";
 
 const emptyForm = {
   name: "",
   category: "",
   qty: 0,
-  sizes: "",
+  sizes: [] as string[],
   price: "",
   colors: [] as string[],
   images: [] as ProductImage[],
   videos: [] as VideoItem[],
   description: "",
   coverType: undefined as "video" | "image" | undefined,
+  volumeDiscounts: [] as VolumeDiscount[],
 };
 
 export function ProductForm({
   initial,
   categories,
+  sizes,
+  colors: colorOptions,
   onSave,
   onCancel,
 }: {
   initial: Product | null;
   categories: string[];
+  sizes: string[];
+  colors: string[];
   onSave: (product: Omit<Product, "id"> & { id?: number }) => void | Promise<void>;
   onCancel: () => void;
 }) {
@@ -37,13 +52,14 @@ export function ProductForm({
           name: initial.name,
           category: initial.category,
           qty: initial.qty,
-          sizes: initial.sizes.join(", "),
+          sizes: [...initial.sizes],
           price: initial.price,
           colors: initial.colors,
           images: normalizeImages(initial.images),
           videos: initial.videos,
           description: initial.description,
           coverType: initial.coverType ?? (initial.videos.length > 0 ? "video" : "image"),
+          volumeDiscounts: normalizeVolumeDiscounts(initial.volumeDiscounts, initial.price),
         }
       : emptyForm,
   );
@@ -52,32 +68,46 @@ export function ProductForm({
   const [selectedVideo, setSelectedVideo] = useState<number | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragVideoIndex, setDragVideoIndex] = useState<number | null>(null);
+  const [mediaTip, setMediaTip] = useState<string | null>(null);
+  const [normalPriceConfirmed, setNormalPriceConfirmed] = useState(() =>
+    Boolean(initial?.price?.trim() && parsePrice(initial.price) > 0),
+  );
   const photoRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
   const canSave = Boolean(form.name.trim() && form.category.trim());
   const videoCover = prefersVideoCover(form);
 
-  function toggleColor(hex: string) {
-    setForm((prev) => {
-      const nextColors = prev.colors.includes(hex)
-        ? prev.colors.filter((c) => c !== hex)
-        : [...prev.colors, hex];
-      return {
-        ...prev,
-        colors: nextColors,
-        images: prev.images.map((img) =>
-          img.color && !nextColors.includes(img.color) ? { ...img, color: undefined } : img,
-        ),
-      };
-    });
+  function setColors(next: string[]) {
+    setForm((prev) => ({
+      ...prev,
+      colors: next,
+      images: prev.images.map((img) =>
+        img.color && !next.some((c) => c.toLowerCase() === img.color?.toLowerCase())
+          ? { ...img, color: undefined }
+          : img,
+      ),
+    }));
   }
 
   async function addPhotos(fileList: FileList | File[]) {
     const files = Array.from(fileList);
     if (files.length === 0) return;
-    const urls = await Promise.all(files.map(readAsDataURL));
+    const tips: string[] = [];
+    const urls = await Promise.all(
+      files.map(async (file) => {
+        try {
+          const { width, height } = await getImageDimensions(file);
+          const tip = productPhotoUploadTip(width, height);
+          if (tip) tips.push(tip);
+        } catch {
+          // ignore dimension read errors
+        }
+        return readAsDataURL(file);
+      }),
+    );
     const added: ProductImage[] = urls.map((src) => ({ src }));
     setForm((prev) => ({ ...prev, images: [...prev.images, ...added] }));
+    setMediaTip(tips[0] ?? null);
   }
 
   function addVideoLink() {
@@ -95,38 +125,41 @@ export function ProductForm({
   async function addVideoFiles(fileList: FileList | File[]) {
     const files = Array.from(fileList);
     if (files.length === 0) return;
+    const tips: string[] = [];
     const items: VideoItem[] = await Promise.all(
-      files.map(async (file) => ({
-        type: "file" as const,
-        src: await readAsDataURL(file),
-        name: file.name,
-      })),
+      files.map(async (file) => {
+        try {
+          const { width, height } = await getVideoDimensions(file);
+          const tip = productVideoUploadTip(width, height);
+          if (tip) tips.push(tip);
+        } catch {
+          // ignore dimension read errors
+        }
+        return {
+          type: "file" as const,
+          src: await readAsDataURL(file),
+          name: file.name,
+        };
+      }),
     );
     setForm((prev) => ({
       ...prev,
       videos: [...prev.videos, ...items],
       coverType: prev.coverType === "image" ? "image" : "video",
     }));
+    setMediaTip(tips[0] ?? null);
   }
 
   return (
     <div className="rounded-[14px] border border-[rgba(201,168,76,0.14)] bg-[#0F281F] p-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="block">
+        <label className="block sm:col-span-2">
           <span className="field-label">Nome</span>
           <input
             className="field-input"
             placeholder="Ex: Camiseta Oversized"
             value={form.name}
             onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-          />
-        </label>
-        <label className="block">
-          <span className="field-label">Categoria</span>
-          <CategorySelect
-            value={form.category}
-            onChange={(category) => setForm((prev) => ({ ...prev, category }))}
-            categories={categories}
           />
         </label>
         <label className="block">
@@ -140,69 +173,160 @@ export function ProductForm({
           />
         </label>
         <label className="block">
-          <span className="field-label">Preço atacado (R$)</span>
-          <input
-            className="field-input"
-            placeholder="27.00"
-            value={form.price}
-            onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
-          />
+          <span className="field-label">Valor (R$)</span>
+          <div className="flex flex-wrap gap-2">
+            <input
+              className="field-input min-w-0 flex-1"
+              placeholder="30.00"
+              value={form.price}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, price: e.target.value }));
+                setNormalPriceConfirmed(false);
+              }}
+            />
+            {!normalPriceConfirmed && (
+              <button
+                type="button"
+                disabled={parsePrice(form.price) <= 0}
+                onClick={() => setNormalPriceConfirmed(true)}
+                className="h-11 shrink-0 rounded-[8px] border border-[#C9A84C] px-4 text-[12px] font-semibold text-[#C9A84C] disabled:opacity-40"
+              >
+                Confirmar valor
+              </button>
+            )}
+          </div>
+          {normalPriceConfirmed ? (
+            <p className="mt-1.5 text-[11px] font-medium text-[#25D366]">
+              Valor normal confirmado: R$ {form.price}
+            </p>
+          ) : (
+            <p className="mt-1.5 text-[11px] text-[#6B7A72]">
+              Confirme o valor normal antes de configurar o desconto progressivo.
+            </p>
+          )}
         </label>
       </div>
 
-      <label className="mt-3 block">
-        <span className="field-label">Tamanhos</span>
-        <input
-          className="field-input"
-          placeholder="P, M, G, GG"
-          value={form.sizes}
-          onChange={(e) => setForm((prev) => ({ ...prev, sizes: e.target.value }))}
-        />
-      </label>
+      {normalPriceConfirmed && (
+      <div className="mt-4 rounded-[12px] border border-[#1E3A2E] bg-[#0A1F18] p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div>
+            <div className="field-label mb-0">Desconto progressivo</div>
+            <p className="mt-1 text-[11px] text-[#6B7A72]">
+              A partir de X peças, defina o novo valor por unidade.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              setForm((prev) => ({
+                ...prev,
+                volumeDiscounts: [...prev.volumeDiscounts, { minQty: 5, unitPrice: "" }],
+              }))
+            }
+            className="h-9 shrink-0 rounded-[8px] border border-[#C9A84C] px-3 text-[12px] font-semibold text-[#C9A84C]"
+          >
+            + Faixa
+          </button>
+        </div>
 
-      <div className="mt-4">
-        <div className="field-label">
-          Cores disponíveis · {form.colors.length} selecionadas
-        </div>
-        <div className="grid grid-cols-8 gap-1">
-          {PRODUCT_COLORS.map((c) => {
-            const active = form.colors.includes(c.hex);
-            return (
-              <button
-                type="button"
-                key={c.hex}
-                title={c.name}
-                onClick={() => toggleColor(c.hex)}
-                className="flex h-11 w-11 items-center justify-center rounded-[10px] transition hover:bg-white/5 hover:scale-105 active:scale-95"
-                style={{
-                  outline: active ? "2px solid #C9A84C" : "2px solid transparent",
-                  outlineOffset: 0,
-                }}
+        {form.volumeDiscounts.length === 0 ? (
+          <p className="text-[12px] text-[#6B7A72]">Nenhuma faixa configurada.</p>
+        ) : (
+          <div className="space-y-3">
+            {form.volumeDiscounts.map((tier, index) => (
+              <div
+                key={`${tier.minQty}-${index}`}
+                className="rounded-[10px] border border-[#1E3A2E] bg-[#0F281F] p-2.5"
               >
-                <span
-                  className="relative flex h-[30px] w-[30px] items-center justify-center rounded-full"
-                  style={{
-                    background: c.hex,
-                    border: "2px solid #2a2a2e",
-                  }}
-                >
-                  {active && (
-                    <span
-                      className="text-[11px] font-bold"
-                      style={{ color: isLightHex(c.hex) ? "#111" : "#fff" }}
-                    >
-                      ✓
-                    </span>
-                  )}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[12px] text-[#A8B5AE]">A partir de</span>
+                  <input
+                    type="number"
+                    min={1}
+                    className="field-input h-10 w-20 py-2 text-center text-[13px]"
+                    value={tier.minQty}
+                    onChange={(e) => {
+                      const minQty = Math.max(1, Number(e.target.value) || 1);
+                      setForm((prev) => ({
+                        ...prev,
+                        volumeDiscounts: prev.volumeDiscounts.map((row, i) =>
+                          i === index ? { ...row, minQty } : row,
+                        ),
+                      }));
+                    }}
+                  />
+                  <span className="text-[12px] text-[#A8B5AE]">peças</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        volumeDiscounts: prev.volumeDiscounts.filter((_, i) => i !== index),
+                      }))
+                    }
+                    className="ml-auto flex h-9 w-9 items-center justify-center text-[#ef4444]"
+                    aria-label="Remover faixa"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-[12px] text-[#A8B5AE]">peças → R$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className="field-input h-10 w-28 py-2 text-[13px]"
+                    placeholder={form.price || "25,50"}
+                    value={tier.unitPrice}
+                    onChange={(e) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        volumeDiscounts: prev.volumeDiscounts.map((row, i) =>
+                          i === index ? { ...row, unitPrice: e.target.value } : row,
+                        ),
+                      }));
+                    }}
+                  />
+                  <span className="text-[11px] text-[#6B7A72]">/ unidade</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      )}
+
+      <div className="mt-3">
+        <div className="field-label">Categoria</div>
+        <CategorySelect
+          value={form.category}
+          onChange={(category) => setForm((prev) => ({ ...prev, category }))}
+          categories={categories}
+        />
+      </div>
+
+      <div className="mt-3">
+        <div className="field-label">Tamanhos</div>
+        <SizeSelect
+          value={form.sizes}
+          onChange={(next) => setForm((prev) => ({ ...prev, sizes: next }))}
+          sizes={sizes}
+        />
+      </div>
+
+      <div className="mt-3">
+        <div className="field-label">Cores</div>
+        <ColorSelect
+          value={form.colors}
+          onChange={setColors}
+          colors={colorOptions}
+        />
       </div>
 
       <div className="mt-4">
         <div className="field-label">Fotos do produto · clique para selecionar · arraste para definir a ordem (1ª = capa)</div>
+        <p className="mb-2 text-[11px] leading-relaxed text-[#6B7A72]">{PRODUCT_PHOTO_GUIDE}</p>
         <input
           ref={photoRef}
           type="file"
@@ -318,6 +442,7 @@ export function ProductForm({
 
       <div className="mt-4">
         <div className="field-label">Vídeos · clique para selecionar · arraste para reordenar (1º = capa)</div>
+        <p className="mb-2 text-[11px] leading-relaxed text-[#6B7A72]">{PRODUCT_VIDEO_GUIDE}</p>
         <div className="flex gap-2">
           <input
             className="field-input"
@@ -436,6 +561,12 @@ export function ProductForm({
         </div>
       </div>
 
+      {mediaTip && (
+        <div className="mt-3 rounded-[10px] border border-[#C9A84C44] bg-[#C9A84C12] px-3 py-2 text-[12px] leading-relaxed text-[#C9A84C]">
+          {mediaTip}
+        </div>
+      )}
+
       <label className="mt-4 block">
         <span className="field-label">Descrição</span>
         <textarea
@@ -456,15 +587,13 @@ export function ProductForm({
               name: form.name.trim(),
               category: form.category.trim(),
               qty: form.qty,
-              sizes: form.sizes
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean),
+              sizes: form.sizes,
               price: form.price,
               colors: form.colors,
               images: form.images,
               videos: form.videos,
               description: form.description,
+              volumeDiscounts: normalizeVolumeDiscounts(form.volumeDiscounts, form.price),
               coverType:
                 form.videos.length === 0 ? "image" : (form.coverType ?? "video"),
             });
