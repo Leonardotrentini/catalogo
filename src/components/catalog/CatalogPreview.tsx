@@ -12,10 +12,11 @@ import {
 import {
   buildGallery,
   colorImageForCart,
-  filterGalleryByColor,
   productThumbIsVideo,
+  productThumbPoster,
   productThumbSrc,
 } from "@/lib/media";
+import { ProductThumbMedia, VideoCoverThumb } from "@/components/ProductThumbMedia";
 import { HighlightStrip } from "@/components/HighlightStrip";
 import { WhatsAppIcon } from "@/components/WhatsAppIcon";
 import { defaultHighlights } from "@/lib/highlights";
@@ -73,6 +74,7 @@ export function CatalogPreview({
         count: items.length,
         cover: withThumb ? productThumbSrc(withThumb) : "",
         coverVideo: withThumb ? productThumbIsVideo(withThumb) : false,
+        coverPoster: withThumb ? productThumbPoster(withThumb) : "",
       };
     });
   }, [products]);
@@ -227,16 +229,8 @@ export function CatalogPreview({
                   className="flex aspect-square w-full items-center justify-center"
                   style={{ background: withAlpha(colors.primary, 0.55) }}
                 >
-                  {productThumbIsVideo(product) ? (
-                    <video
-                      src={productThumbSrc(product)}
-                      className="h-full w-full object-contain"
-                      muted
-                      playsInline
-                    />
-                  ) : productThumbSrc(product) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={productThumbSrc(product)} alt="" className="h-full w-full object-contain" />
+                  {productThumbSrc(product) ? (
+                    <ProductThumbMedia product={product} />
                   ) : (
                     <div
                       className="h-full w-full"
@@ -364,7 +358,7 @@ function HomeView({
   brand: Brand;
   colors: BrandColors;
   storeName: string;
-  categories: { name: string; count: number; cover: string; coverVideo: boolean }[];
+  categories: { name: string; count: number; cover: string; coverVideo: boolean; coverPoster: string }[];
   onOpenCategory: (name: string) => void;
   onOpenCart: () => void;
 }) {
@@ -415,12 +409,7 @@ function HomeView({
               style={{ background: withAlpha(colors.primary, 0.65) }}
             >
               {cat.coverVideo && cat.cover ? (
-                <video
-                  src={cat.cover}
-                  className="h-full w-full object-contain"
-                  muted
-                  playsInline
-                />
+                <VideoCoverThumb src={cat.cover} poster={cat.coverPoster} />
               ) : cat.cover ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={cat.cover} alt="" className="h-full w-full object-contain" />
@@ -538,9 +527,7 @@ function ProductSheet({
   const [successOpen, setSuccessOpen] = useState(false);
   const [addedPieces, setAddedPieces] = useState(0);
 
-  const gallery = useMemo(() => {
-    return filterGalleryByColor(buildGallery(product), color);
-  }, [product, color]);
+  const gallery = useMemo(() => buildGallery(product), [product]);
 
   const current = gallery[index] ?? gallery[0];
   const cartPieces = cartTotalPieces(cart);

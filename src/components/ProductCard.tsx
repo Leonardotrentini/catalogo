@@ -1,7 +1,8 @@
 "use client";
 
 import type { Product } from "@/lib/types";
-import { productThumbIsVideo, productThumbSrc } from "@/lib/media";
+import { productThumbSrc } from "@/lib/media";
+import { ProductThumbMedia } from "@/components/ProductThumbMedia";
 import { hasVolumePricing, lowestTierUnitPrice } from "@/lib/pricing";
 import { formatMoney } from "@/lib/utils";
 
@@ -16,8 +17,7 @@ export function ProductCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const thumb = productThumbSrc(product);
-  const hasThumb = Boolean(thumb);
+  const hasThumb = Boolean(productThumbSrc(product));
   const isDraft = !product.price || product.images.length === 0;
   const isOutOfStock = product.qty <= 0;
   const visibleSizes = product.sizes.slice(0, 3);
@@ -52,16 +52,8 @@ export function ProductCard({
     >
       <div className="flex gap-3">
         <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[12px] border border-[rgba(201,168,76,0.1)] bg-[#0F281F]">
-          {productThumbIsVideo(product) ? (
-            <video
-              src={thumb}
-              className="h-full w-full object-cover"
-              muted
-              playsInline
-            />
-          ) : hasThumb ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={thumb} alt="" className="h-full w-full object-cover" />
+          {hasThumb ? (
+            <ProductThumbMedia product={product} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-[#1E3A2E] to-[#0A1F18] text-[#6B7A72]">
               <span className="text-lg leading-none">🖼</span>

@@ -113,6 +113,7 @@ export function ProductForm({
     const tips: string[] = [];
     try {
       const added: ProductImage[] = [];
+      const failed: string[] = [];
       for (const file of files) {
         try {
           const { width, height } = await getImageDimensions(file);
@@ -121,11 +122,25 @@ export function ProductForm({
         } catch {
           // ignore dimension read errors
         }
-        const url = await uploadImageFile(catalogId, file);
-        added.push({ src: url });
+        try {
+          const url = await uploadImageFile(catalogId, file);
+          added.push({ src: url });
+        } catch (err) {
+          failed.push(file.name);
+          if (added.length === 0 && files.length === 1) {
+            throw err;
+          }
+        }
       }
-      setForm((prev) => ({ ...prev, images: [...prev.images, ...added] }));
-      setMediaTip(tips[0] ?? null);
+      if (added.length > 0) {
+        setForm((prev) => ({ ...prev, images: [...prev.images, ...added] }));
+        setMediaTip(tips[0] ?? null);
+      }
+      if (failed.length > 0) {
+        setSaveError(
+          `${added.length} foto(s) enviada(s). Falha em ${failed.length}: ${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}.`,
+        );
+      }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Falha ao enviar imagem.");
     } finally {

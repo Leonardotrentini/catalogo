@@ -45,6 +45,10 @@ export function productThumbIsVideo(product: Product): boolean {
   return prefersVideoCover(product) && product.videos.some((v) => v.type === "file");
 }
 
+export function productThumbPoster(product: Product): string {
+  return normalizeImages(product.images)[0]?.src ?? "";
+}
+
 export function colorImageForCart(product: Product, color: string): string {
   const images = normalizeImages(product.images);
   const match = images.find((img) => img.color === color);
