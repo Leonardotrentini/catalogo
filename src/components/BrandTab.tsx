@@ -5,7 +5,11 @@ import type { Brand, BrandColors } from "@/lib/types";
 import { extractColorsFromDataUrl, mapExtractedToBrand } from "@/lib/extractColors";
 import { readAsDataURL } from "@/lib/utils";
 import { HighlightsEditor } from "./HighlightsEditor";
+import { SellersEditor } from "./SellersEditor";
 import { getYoutubeEmbedUrl } from "@/lib/youtube";
+import { normalizeSellers, newSellerId } from "@/lib/sellers";
+import { digitsOnly } from "@/lib/utils";
+import type { BrandSeller } from "@/lib/types";
 
 function ColorField({
   label,
@@ -53,6 +57,22 @@ export function BrandTab({
   const [scanning, setScanning] = useState(false);
   const [extracted, setExtracted] = useState<string[]>([]);
   const embedUrl = getYoutubeEmbedUrl(brand.videoUrl);
+
+  const sellers: BrandSeller[] =
+    brand.sellers !== undefined && brand.sellers.length > 0
+      ? brand.sellers
+      : normalizeSellers(brand).length > 0
+        ? normalizeSellers(brand)
+        : [{ id: newSellerId(), name: "", phone: "" }];
+
+  function handleSellersChange(next: BrandSeller[]) {
+    const firstPhone = next.map((seller) => digitsOnly(seller.phone)).find(Boolean) ?? "";
+    setBrand((prev) => ({
+      ...prev,
+      sellers: next,
+      whatsapp: firstPhone,
+    }));
+  }
 
   async function handleLogo(file: File) {
     const dataUrl = await readAsDataURL(file);
@@ -215,15 +235,7 @@ export function BrandTab({
           )}
         </label>
 
-        <label className="block">
-          <span className="field-label">WhatsApp principal</span>
-          <input
-            className="field-input"
-            placeholder="5511999999999"
-            value={brand.whatsapp}
-            onChange={(e) => setBrand((prev) => ({ ...prev, whatsapp: e.target.value }))}
-          />
-        </label>
+        <SellersEditor sellers={sellers} onChange={handleSellersChange} />
 
         <label className="block">
           <span className="field-label">Instagram</span>

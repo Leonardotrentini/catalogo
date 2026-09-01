@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { Brand, BrandColors, CartItem, Product, ProductColorEntry } from "@/lib/types";
 import {
   colorNameFromHex,
@@ -36,6 +36,7 @@ import {
   hasVolumePricing,
 } from "@/lib/pricing";
 import { getYoutubeEmbedUrl } from "@/lib/youtube";
+import { normalizeSellers, primaryWhatsAppDigits } from "@/lib/sellers";
 
 export function CatalogPreview({
   brand,
@@ -371,7 +372,7 @@ function HomeView({
       ? ig
       : `https://${ig}`
     : `https://instagram.com/${ig}`;
-  const whatsappDigits = digitsOnly(brand.whatsapp);
+  const whatsappDigits = primaryWhatsAppDigits(brand);
 
   return (
     <div className="pb-8">
@@ -1148,6 +1149,18 @@ function CartSheet({
   const [customerName, setCustomerName] = useState("");
   const [customerCep, setCustomerCep] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const sellers = useMemo(() => normalizeSellers(brand), [brand]);
+  const [sellerId, setSellerId] = useState("");
+
+  useEffect(() => {
+    if (sellers.length === 0) {
+      setSellerId("");
+      return;
+    }
+    setSellerId((current) =>
+      sellers.some((seller) => seller.id === current) ? current : sellers[0].id,
+    );
+  }, [sellers]);
 
   const pieces = cart.reduce((s, i) => s + i.qty, 0);
   const total = cartGrandTotal(cart, products);
@@ -1212,9 +1225,14 @@ function CartSheet({
       return;
     }
 
-    const storePhone = digitsOnly(brand.whatsapp);
+    const seller = sellers.find((item) => item.id === sellerId) ?? sellers[0];
+    const storePhone = seller?.phone ?? "";
     if (!storePhone) {
-      setFormError("WhatsApp da loja não configurado.");
+      setFormError("Nenhum vendedor configurado na loja.");
+      return;
+    }
+    if (sellers.length > 1 && !sellerId) {
+      setFormError("Selecione um vendedor para enviar o pedido.");
       return;
     }
 
@@ -1247,7 +1265,8 @@ function CartSheet({
       `*Dados do cliente*\n` +
       `Nome: ${name}\n` +
       `WhatsApp: +${phone}\n` +
-      `CEP: ${formatCep(customerCep)}\n\n` +
+      `CEP: ${formatCep(customerCep)}\n` +
+      `Vendedor: ${seller.name}\n\n` +
       `*Itens do pedido*\n\n` +
       `${itemLines.join("\n\n")}\n\n` +
       `━━━━━━━━━━━━━━━\n` +
@@ -1445,6 +1464,51 @@ function CartSheet({
                   </span>
                 </div>
               </div>
+
+              {sellers.length > 1 && (
+                <div className="space-y-2">
+                  <span className="block text-[12px] text-[#A8B5AE]">
+                    Enviar para <span className="text-[#ef4444]">*</span>
+                  </span>
+                  <div className="space-y-2">
+                    {sellers.map((seller) => {
+                      const selected = sellerId === seller.id;
+                      return (
+                        <button
+                          key={seller.id}
+                          type="button"
+                          onClick={() => setSellerId(seller.id)}
+                          className="flex w-full items-center gap-3 rounded-[10px] border px-3 py-3 text-left transition"
+                          style={{
+                            borderColor: selected ? colors.accent : "#2a2a2e",
+                            background: selected ? withAlpha(colors.accent, 0.12) : colors.card,
+                            boxShadow: selected ? `0 0 0 1px ${withAlpha(colors.accent, 0.35)}` : "none",
+                          }}
+                        >
+                          <span
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2"
+                            style={{
+                              borderColor: selected ? colors.accent : "#555",
+                              background: selected ? colors.accent : "transparent",
+                            }}
+                          >
+                            {selected && (
+                              <span
+                                className="h-2 w-2 rounded-full"
+                                style={{ background: colors.primary }}
+                              />
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[14px] font-semibold">{seller.name}</span>
+                            <span className="block text-[12px] text-[#6B7A72]">WhatsApp</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <label className="block">

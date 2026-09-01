@@ -37,12 +37,19 @@ export interface BrandColors {
   card: string;
 }
 
+export interface BrandSeller {
+  id: string;
+  name: string;
+  phone: string;
+}
+
 export interface Brand {
   name: string;
   logo: string;
   banner: string;
   videoUrl: string;
   whatsapp: string;
+  sellers?: BrandSeller[];
   instagram: string;
   cnpj: string;
   highlights?: BrandHighlight[];

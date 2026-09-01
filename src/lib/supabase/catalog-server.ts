@@ -1,13 +1,19 @@
 import { DEFAULT_BRAND, DEFAULT_COLORS } from "@/lib/constants";
 import { normalizeHighlightStyle, normalizeHighlights } from "@/lib/highlights";
 import { normalizeVolumeDiscounts } from "@/lib/pricing";
+import { normalizeBrandSellers, normalizeSellers, primaryWhatsAppDigits } from "@/lib/sellers";
 import type { Brand, BrandColors, Product, ProductImage, VideoItem } from "@/lib/types";
 import { createSupabaseServerClient } from "./server";
 
 function normalizeBrand(raw: Partial<Brand> | null | undefined): Brand {
   const merged = { ...DEFAULT_BRAND, ...(raw ?? {}) };
+  const sellers = normalizeBrandSellers(
+    merged.sellers?.length ? merged.sellers : normalizeSellers(merged),
+  );
   return {
     ...merged,
+    sellers,
+    whatsapp: primaryWhatsAppDigits({ ...merged, sellers }),
     highlights: normalizeHighlights(merged.highlights),
     highlightStyle: normalizeHighlightStyle(merged.highlightStyle),
     checkoutButtonText: merged.checkoutButtonText?.trim() || DEFAULT_BRAND.checkoutButtonText,
