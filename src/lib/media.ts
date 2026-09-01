@@ -51,8 +51,28 @@ export function productThumbPoster(product: Product): string {
 
 export function colorImageForCart(product: Product, color: string): string {
   const images = normalizeImages(product.images);
-  const match = images.find((img) => img.color === color);
+  const match = images.find((img) => img.color && colorsMatch(img.color, color));
   return match?.src ?? images[0]?.src ?? "";
+}
+
+function colorsMatch(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+/** Index in gallery for the photo tagged with the selected color (falls back to first image). */
+export function galleryIndexForColor(product: Product, items: GalleryItem[], color: string): number {
+  if (!color || items.length === 0) return 0;
+
+  const tagged = items.findIndex(
+    (item) => item.kind === "image" && item.color && colorsMatch(item.color, color),
+  );
+  if (tagged >= 0) return tagged;
+
+  const preferredSrc = colorImageForCart(product, color);
+  const bySrc = items.findIndex((item) => item.kind === "image" && item.src === preferredSrc);
+  if (bySrc >= 0) return bySrc;
+
+  return 0;
 }
 
 export function reorder<T>(list: T[], from: number, to: number): T[] {

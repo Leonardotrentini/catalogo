@@ -12,12 +12,14 @@ import {
 import {
   buildGallery,
   colorImageForCart,
+  galleryIndexForColor,
   productThumbIsVideo,
   productThumbPoster,
   productThumbSrc,
 } from "@/lib/media";
 import { ProductThumbMedia, VideoCoverThumb } from "@/components/ProductThumbMedia";
 import { HighlightStrip } from "@/components/HighlightStrip";
+import { InstagramIcon } from "@/components/InstagramIcon";
 import { WhatsAppIcon } from "@/components/WhatsAppIcon";
 import { defaultHighlights } from "@/lib/highlights";
 import {
@@ -363,7 +365,13 @@ function HomeView({
   onOpenCart: () => void;
 }) {
   const embed = getYoutubeEmbedUrl(brand.videoUrl);
-  const ig = brand.instagram.replace(/^@/, "");
+  const ig = brand.instagram.replace(/^@/, "").trim();
+  const instagramHref = ig.includes("instagram.com")
+    ? ig.startsWith("http")
+      ? ig
+      : `https://${ig}`
+    : `https://instagram.com/${ig}`;
+  const whatsappDigits = digitsOnly(brand.whatsapp);
 
   return (
     <div className="pb-8">
@@ -468,30 +476,43 @@ function HomeView({
         </button>
       </div>
 
-      <footer className="mt-6 space-y-3 px-4" style={{ color: withAlpha(colors.text, 0.7) }}>
+      <footer className="mt-6 space-y-2 px-4">
         {brand.instagram && (
-          <div className="text-[13px]">
-            Instagram{" "}
-            <a
-              href={`https://instagram.com/${ig}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: colors.accent }}
-            >
-              @{ig}
-            </a>
+          <a
+            href={instagramHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-11 items-center gap-3 rounded-[10px] text-[13px] transition hover:brightness-110 active:scale-[0.99]"
+            style={{ color: withAlpha(colors.text, 0.8) }}
+          >
+            <InstagramIcon size={24} />
+            <span>
+              Instagram <span style={{ color: colors.accent }}>@{ig}</span>
+            </span>
+          </a>
+        )}
+        {brand.cnpj && (
+          <div className="px-0.5 text-[12px]" style={{ color: withAlpha(colors.text, 0.55) }}>
+            CNPJ {brand.cnpj}
           </div>
         )}
-        {brand.cnpj && <div className="text-[12px]">CNPJ {brand.cnpj}</div>}
-        <div className="flex items-center gap-2 text-[12px]">
-          <div
-            className="flex h-4 w-4 items-center justify-center rounded"
-            style={{ background: "#1a3322" }}
+        {whatsappDigits && (
+          <a
+            href={`https://wa.me/${whatsappDigits}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-11 items-center gap-3 rounded-[10px] text-[13px] transition hover:brightness-110 active:scale-[0.99]"
+            style={{ color: withAlpha(colors.text, 0.8) }}
           >
-            <WhatsAppIcon size={11} color="#25D366" />
-          </div>
-          WhatsApp
-        </div>
+            <span
+              className="flex h-6 w-6 items-center justify-center rounded-md"
+              style={{ background: "#1a3322" }}
+            >
+              <WhatsAppIcon size={14} color="#25D366" />
+            </span>
+            WhatsApp
+          </a>
+        )}
       </footer>
     </div>
   );
@@ -516,8 +537,11 @@ function ProductSheet({
   onOpenCart: () => void;
   onGoHome: () => void;
 }) {
-  const [index, setIndex] = useState(0);
-  const [color, setColor] = useState(product.colors[0] ?? "");
+  const initialColor = product.colors[0] ?? "";
+  const [index, setIndex] = useState(() =>
+    galleryIndexForColor(product, buildGallery(product), initialColor),
+  );
+  const [color, setColor] = useState(initialColor);
   const [size, setSize] = useState(product.sizes[0] ?? "");
   const [pickQty, setPickQty] = useState(1);
   const [pending, setPending] = useState<
@@ -543,7 +567,7 @@ function ProductSheet({
 
   function selectColor(next: string) {
     setColor(next);
-    setIndex(0);
+    setIndex(galleryIndexForColor(product, gallery, next));
   }
 
   function pendingKey(colorValue: string, sizeValue: string) {
