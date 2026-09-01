@@ -43,11 +43,22 @@ export function isLightHex(hex: string): boolean {
   return luminance(r, g, b) > 0.65;
 }
 
-export function colorNameFromHex(hex: string): string {
-  const found = PRODUCT_COLORS.find(
-    (c) => c.hex.toLowerCase() === hex.toLowerCase(),
-  );
-  return found?.name ?? hex.toUpperCase();
+export function normalizeHex(hex: string): string {
+  const q = hex.trim().toLowerCase();
+  if (!q.startsWith("#")) return `#${q}`;
+  return q;
+}
+
+export function colorNameFromHex(
+  hex: string,
+  customColors?: { name: string; hex: string }[],
+): string {
+  const norm = normalizeHex(hex);
+  const found = PRODUCT_COLORS.find((c) => normalizeHex(c.hex) === norm);
+  if (found) return found.name;
+  const custom = customColors?.find((c) => normalizeHex(c.hex) === norm);
+  if (custom?.name.trim()) return custom.name.trim();
+  return norm.toUpperCase();
 }
 
 export function formatMoney(value: string | number): string {

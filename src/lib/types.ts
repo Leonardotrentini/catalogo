@@ -49,6 +49,12 @@ export interface Brand {
   highlightStyle?: HighlightStyle;
   checkoutButtonText?: string;
   checkoutButtonColor?: string;
+  customProductColors?: ProductColorEntry[];
+}
+
+export interface ProductColorEntry {
+  name: string;
+  hex: string;
 }
 
 export type HighlightStyle = "pill" | "minimal" | "outline" | "glass";

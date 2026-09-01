@@ -13,7 +13,7 @@ import {
   productPhotoUploadTip,
   productVideoUploadTip,
 } from "@/lib/mediaGuide";
-import type { Product, ProductImage, VideoItem, VolumeDiscount } from "@/lib/types";
+import type { Product, ProductImage, VideoItem, VolumeDiscount, ProductColorEntry } from "@/lib/types";
 import { normalizeVolumeDiscounts } from "@/lib/pricing";
 import { colorNameFromHex, parsePrice, readAsDataURL } from "@/lib/utils";
 
@@ -36,6 +36,8 @@ export function ProductForm({
   categories,
   sizes,
   colors: colorOptions,
+  customProductColors = [],
+  onRegisterCustomColor,
   onSave,
   onCancel,
 }: {
@@ -43,6 +45,8 @@ export function ProductForm({
   categories: string[];
   sizes: string[];
   colors: string[];
+  customProductColors?: ProductColorEntry[];
+  onRegisterCustomColor?: (entry: ProductColorEntry) => void;
   onSave: (product: Omit<Product, "id"> & { id?: number }) => void | Promise<void>;
   onCancel: () => void;
 }) {
@@ -76,6 +80,7 @@ export function ProductForm({
   const videoRef = useRef<HTMLInputElement>(null);
   const canSave = Boolean(form.name.trim() && form.category.trim());
   const videoCover = prefersVideoCover(form);
+  const colorLabel = (hex: string) => colorNameFromHex(hex, customProductColors);
 
   function setColors(next: string[]) {
     setForm((prev) => ({
@@ -321,6 +326,8 @@ export function ProductForm({
           value={form.colors}
           onChange={setColors}
           colors={colorOptions}
+          customColors={customProductColors}
+          onRegisterColor={onRegisterCustomColor}
         />
       </div>
 
@@ -402,7 +409,7 @@ export function ProductForm({
                         <button
                           type="button"
                           key={hex}
-                          title={`Associar a ${colorNameFromHex(hex)}`}
+                          title={`Associar a ${colorLabel(hex)}`}
                           onClick={() =>
                             setForm((prev) => ({
                               ...prev,
@@ -424,7 +431,7 @@ export function ProductForm({
                 )}
                 {selected && form.colors.length > 0 && (
                   <div className="mt-1 text-[10px] text-[#C9A84C]">
-                    {img.color ? colorNameFromHex(img.color) : "Sem cor"}
+                    {img.color ? colorLabel(img.color) : "Sem cor"}
                   </div>
                 )}
               </div>

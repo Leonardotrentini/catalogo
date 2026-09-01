@@ -6,7 +6,8 @@ import { PreviewTab } from "./PreviewTab";
 import { ProductsTab } from "./ProductsTab";
 import { TopBar } from "./TopBar";
 import { DEFAULT_BRAND, DEFAULT_COLORS } from "@/lib/constants";
-import type { AdminTab, Brand, BrandColors, Product } from "@/lib/types";
+import type { AdminTab, Brand, BrandColors, Product, ProductColorEntry } from "@/lib/types";
+import { normalizeHex } from "@/lib/utils";
 import {
   deleteProduct,
   loadCatalog,
@@ -140,6 +141,18 @@ export function AdminApp({
     setProducts((prev) => prev.filter((p) => p.id !== productId));
   }
 
+  function registerCustomColor(entry: ProductColorEntry) {
+    const norm = normalizeHex(entry.hex);
+    setBrand((prev) => {
+      const list = prev.customProductColors ?? [];
+      const exists = list.some((c) => normalizeHex(c.hex) === norm);
+      const customProductColors = exists
+        ? list.map((c) => (normalizeHex(c.hex) === norm ? { name: entry.name.trim(), hex: norm } : c))
+        : [...list, { name: entry.name.trim(), hex: norm }];
+      return { ...prev, customProductColors };
+    });
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0A1F18] text-[#A8B5AE]">
@@ -217,10 +230,18 @@ export function AdminApp({
               products={products}
               onSaveProduct={handleSaveProduct}
               onDeleteProduct={handleDeleteProduct}
+              customProductColors={brand.customProductColors ?? []}
+              onRegisterCustomColor={registerCustomColor}
             />
           )}
           {tab === "preview" && (
-            <PreviewTab brand={brand} colors={colors} setColors={setColors} products={products} />
+            <PreviewTab
+              brand={brand}
+              colors={colors}
+              setColors={setColors}
+              products={products}
+              customProductColors={brand.customProductColors ?? []}
+            />
           )}
         </main>
       </div>

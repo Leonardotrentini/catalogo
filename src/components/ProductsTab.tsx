@@ -4,16 +4,20 @@ import { useMemo, useState } from "react";
 import { ProductCard } from "./ProductCard";
 import { ProductForm } from "./ProductForm";
 import { DEFAULT_CATEGORIES, DEFAULT_SIZES, PRODUCT_COLORS } from "@/lib/constants";
-import type { Product } from "@/lib/types";
+import type { Product, ProductColorEntry } from "@/lib/types";
 
 export function ProductsTab({
   products,
   onSaveProduct,
   onDeleteProduct,
+  customProductColors = [],
+  onRegisterCustomColor,
 }: {
   products: Product[];
   onSaveProduct: (data: Omit<Product, "id"> & { id?: number }) => Promise<void>;
   onDeleteProduct: (productId: number) => Promise<void>;
+  customProductColors?: ProductColorEntry[];
+  onRegisterCustomColor?: (entry: ProductColorEntry) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -32,9 +36,10 @@ export function ProductsTab({
 
   const colors = useMemo(() => {
     const defaults = PRODUCT_COLORS.map((c) => c.hex);
+    const custom = customProductColors.map((c) => c.hex);
     const extra = products.flatMap((p) => p.colors).filter(Boolean);
-    return [...new Set([...defaults, ...extra])];
-  }, [products]);
+    return [...new Set([...defaults, ...custom, ...extra])];
+  }, [products, customProductColors]);
 
   const usedCategories = useMemo(
     () => [...new Set(products.map((p) => p.category).filter(Boolean))],
@@ -98,6 +103,8 @@ export function ProductsTab({
             categories={categories}
             sizes={sizes}
             colors={colors}
+            customProductColors={customProductColors}
+            onRegisterCustomColor={onRegisterCustomColor}
             onSave={saveProduct}
             onCancel={() => {
               setShowForm(false);

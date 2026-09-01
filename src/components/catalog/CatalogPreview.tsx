@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import type { Brand, BrandColors, CartItem, Product } from "@/lib/types";
+import type { Brand, BrandColors, CartItem, Product, ProductColorEntry } from "@/lib/types";
 import {
   colorNameFromHex,
   digitsOnly,
@@ -40,13 +40,17 @@ export function CatalogPreview({
   setColors,
   products,
   publicMode = false,
+  customProductColors,
 }: {
   brand: Brand;
   colors: BrandColors;
   setColors?: Dispatch<SetStateAction<BrandColors>>;
   products: Product[];
   publicMode?: boolean;
+  customProductColors?: ProductColorEntry[];
 }) {
+  const palette = customProductColors ?? brand.customProductColors ?? [];
+  const colorLabel = (hex: string) => colorNameFromHex(hex, palette);
   const [localColors, setLocalColors] = useState(colorsProp);
   const colors = publicMode ? localColors : colorsProp;
   const updateColors = publicMode ? setLocalColors : setColors!;
@@ -294,6 +298,7 @@ export function CatalogPreview({
             product={activeProduct}
             colors={colors}
             cart={cart}
+            colorLabel={colorLabel}
             onClose={() => setActiveProduct(null)}
             onAdd={(item, options) => addToCart(item, options)}
             onOpenCart={() => {
@@ -507,6 +512,7 @@ function ProductSheet({
   product,
   colors,
   cart,
+  colorLabel,
   onClose,
   onAdd,
   onOpenCart,
@@ -515,6 +521,7 @@ function ProductSheet({
   product: Product;
   colors: BrandColors;
   cart: CartItem[];
+  colorLabel: (hex: string) => string;
   onClose: () => void;
   onAdd: (item: Omit<CartItem, "key">, options?: { silent?: boolean }) => void;
   onOpenCart: () => void;
@@ -559,7 +566,7 @@ function ProductSheet({
   function addToPendingList() {
     const colorValue = color || "";
     const sizeValue = size || "—";
-    const colorName = colorValue ? colorNameFromHex(colorValue) : "—";
+    const colorName = colorValue ? colorLabel(colorValue) : "—";
     const key = pendingKey(colorValue, sizeValue);
 
     setPending((prev) => {
@@ -827,7 +834,7 @@ function ProductSheet({
 
           {product.colors.length > 0 && (
             <div className="mt-5">
-              <div className="mb-2 text-[12px]">Cor: {color ? colorNameFromHex(color) : "—"}</div>
+              <div className="mb-2 text-[12px]">Cor: {color ? colorLabel(color) : "—"}</div>
               <div className="flex flex-wrap gap-3">
                 {product.colors.map((c) => {
                   const selected = color === c;
@@ -845,7 +852,7 @@ function ProductSheet({
                         boxShadow: selected ? `0 0 0 4px ${withAlpha(colors.accent, 0.25)}` : "none",
                       }}
                       aria-pressed={selected}
-                      title={colorNameFromHex(c)}
+                      title={colorLabel(c)}
                     />
                   );
                 })}

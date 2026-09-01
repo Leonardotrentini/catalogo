@@ -14,6 +14,11 @@ function normalizeBrand(raw: Partial<Brand> | null | undefined): Brand {
     highlightStyle: normalizeHighlightStyle(merged.highlightStyle),
     checkoutButtonText: merged.checkoutButtonText?.trim() || DEFAULT_BRAND.checkoutButtonText,
     checkoutButtonColor: merged.checkoutButtonColor?.trim() || DEFAULT_BRAND.checkoutButtonColor,
+    customProductColors: Array.isArray(merged.customProductColors)
+      ? merged.customProductColors
+          .filter((c) => c && typeof c.name === "string" && typeof c.hex === "string")
+          .map((c) => ({ name: c.name.trim(), hex: c.hex.trim().toLowerCase() }))
+      : [],
   };
 }
 
