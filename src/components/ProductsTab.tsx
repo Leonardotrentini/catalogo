@@ -7,12 +7,14 @@ import { DEFAULT_CATEGORIES, DEFAULT_SIZES, PRODUCT_COLORS } from "@/lib/constan
 import type { Product, ProductColorEntry } from "@/lib/types";
 
 export function ProductsTab({
+  catalogId,
   products,
   onSaveProduct,
   onDeleteProduct,
   customProductColors = [],
   onRegisterCustomColor,
 }: {
+  catalogId: string;
   products: Product[];
   onSaveProduct: (data: Omit<Product, "id"> & { id?: number }) => Promise<void>;
   onDeleteProduct: (productId: number) => Promise<void>;
@@ -99,6 +101,7 @@ export function ProductsTab({
       {showForm && (
         <div className="mt-5">
           <ProductForm
+            catalogId={catalogId}
             initial={editing}
             categories={categories}
             sizes={sizes}

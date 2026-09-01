@@ -15,7 +15,12 @@ import {
 } from "@/lib/mediaGuide";
 import type { Product, ProductImage, VideoItem, VolumeDiscount, ProductColorEntry } from "@/lib/types";
 import { normalizeVolumeDiscounts } from "@/lib/pricing";
-import { colorNameFromHex, parsePrice, readAsDataURL } from "@/lib/utils";
+import {
+  prepareProductMediaForSave,
+  uploadImageFile,
+  uploadVideoFile,
+} from "@/lib/mediaUpload";
+import { colorNameFromHex, parsePrice } from "@/lib/utils";
 
 const emptyForm = {
   name: "",
@@ -32,6 +37,7 @@ const emptyForm = {
 };
 
 export function ProductForm({
+  catalogId,
   initial,
   categories,
   sizes,
@@ -41,6 +47,7 @@ export function ProductForm({
   onSave,
   onCancel,
 }: {
+  catalogId: string;
   initial: Product | null;
   categories: string[];
   sizes: string[];
@@ -73,6 +80,10 @@ export function ProductForm({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragVideoIndex, setDragVideoIndex] = useState<number | null>(null);
   const [mediaTip, setMediaTip] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [saveProgress, setSaveProgress] = useState<string | null>(null);
   const [normalPriceConfirmed, setNormalPriceConfirmed] = useState(() =>
     Boolean(initial?.price?.trim() && parsePrice(initial.price) > 0),
   );
@@ -97,9 +108,12 @@ export function ProductForm({
   async function addPhotos(fileList: FileList | File[]) {
     const files = Array.from(fileList);
     if (files.length === 0) return;
+    setUploadingMedia(true);
+    setSaveError(null);
     const tips: string[] = [];
-    const urls = await Promise.all(
-      files.map(async (file) => {
+    try {
+      const added: ProductImage[] = [];
+      for (const file of files) {
         try {
           const { width, height } = await getImageDimensions(file);
           const tip = productPhotoUploadTip(width, height);
@@ -107,12 +121,16 @@ export function ProductForm({
         } catch {
           // ignore dimension read errors
         }
-        return readAsDataURL(file);
-      }),
-    );
-    const added: ProductImage[] = urls.map((src) => ({ src }));
-    setForm((prev) => ({ ...prev, images: [...prev.images, ...added] }));
-    setMediaTip(tips[0] ?? null);
+        const url = await uploadImageFile(catalogId, file);
+        added.push({ src: url });
+      }
+      setForm((prev) => ({ ...prev, images: [...prev.images, ...added] }));
+      setMediaTip(tips[0] ?? null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Falha ao enviar imagem.");
+    } finally {
+      setUploadingMedia(false);
+    }
   }
 
   function addVideoLink() {
@@ -130,9 +148,12 @@ export function ProductForm({
   async function addVideoFiles(fileList: FileList | File[]) {
     const files = Array.from(fileList);
     if (files.length === 0) return;
+    setUploadingMedia(true);
+    setSaveError(null);
     const tips: string[] = [];
-    const items: VideoItem[] = await Promise.all(
-      files.map(async (file) => {
+    try {
+      const items: VideoItem[] = [];
+      for (const file of files) {
         try {
           const { width, height } = await getVideoDimensions(file);
           const tip = productVideoUploadTip(width, height);
@@ -140,19 +161,57 @@ export function ProductForm({
         } catch {
           // ignore dimension read errors
         }
-        return {
-          type: "file" as const,
-          src: await readAsDataURL(file),
-          name: file.name,
-        };
-      }),
-    );
-    setForm((prev) => ({
-      ...prev,
-      videos: [...prev.videos, ...items],
-      coverType: prev.coverType === "image" ? "image" : "video",
-    }));
-    setMediaTip(tips[0] ?? null);
+        const url = await uploadVideoFile(catalogId, file);
+        items.push({ type: "file", src: url, name: file.name });
+      }
+      setForm((prev) => ({
+        ...prev,
+        videos: [...prev.videos, ...items],
+        coverType: prev.coverType === "image" ? "image" : "video",
+      }));
+      setMediaTip(tips[0] ?? null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Falha ao enviar vídeo.");
+    } finally {
+      setUploadingMedia(false);
+    }
+  }
+
+  async function handleSave() {
+    if (!canSave) {
+      setSaveError("Preencha o nome e a categoria do produto.");
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    setSaveProgress(null);
+    try {
+      const media = await prepareProductMediaForSave(
+        catalogId,
+        form.images,
+        form.videos,
+        setSaveProgress,
+      );
+      await onSave({
+        id: initial?.id,
+        name: form.name.trim(),
+        category: form.category.trim(),
+        qty: form.qty,
+        sizes: form.sizes,
+        price: form.price,
+        colors: form.colors,
+        images: media.images,
+        videos: media.videos,
+        description: form.description,
+        volumeDiscounts: normalizeVolumeDiscounts(form.volumeDiscounts, form.price),
+        coverType: form.videos.length === 0 ? "image" : (form.coverType ?? "video"),
+      });
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Erro ao salvar produto.");
+    } finally {
+      setSaving(false);
+      setSaveProgress(null);
+    }
   }
 
   return (
@@ -584,38 +643,36 @@ export function ProductForm({
         />
       </label>
 
-      <div className="mt-4 flex gap-2">
+      {saveError && (
+        <div className="mt-3 rounded-[10px] border border-[#ef4444]/40 bg-[#ef4444]/10 px-3 py-2 text-[13px] text-[#fca5a5]">
+          {saveError}
+        </div>
+      )}
+
+      {uploadingMedia && (
+        <div className="mt-3 text-[12px] text-[#C9A84C]">Enviando mídia…</div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          disabled={!canSave}
-          onClick={() => {
-            void onSave({
-              id: initial?.id,
-              name: form.name.trim(),
-              category: form.category.trim(),
-              qty: form.qty,
-              sizes: form.sizes,
-              price: form.price,
-              colors: form.colors,
-              images: form.images,
-              videos: form.videos,
-              description: form.description,
-              volumeDiscounts: normalizeVolumeDiscounts(form.volumeDiscounts, form.price),
-              coverType:
-                form.videos.length === 0 ? "image" : (form.coverType ?? "video"),
-            });
-          }}
+          disabled={!canSave || saving || uploadingMedia}
+          onClick={() => void handleSave()}
           className="h-11 rounded-[10px] bg-[#C9A84C] px-5 text-[14px] font-semibold text-black disabled:opacity-40"
         >
-          {initial ? "Salvar" : "Adicionar"}
+          {saving ? (saveProgress ?? "Salvando…") : initial ? "Salvar" : "Adicionar"}
         </button>
         <button
           type="button"
+          disabled={saving}
           onClick={onCancel}
-          className="h-11 rounded-[10px] border border-[#2a2a2e] px-5 text-[14px] hover:border-white/30"
+          className="h-11 rounded-[10px] border border-[#2a2a2e] px-5 text-[14px] hover:border-white/30 disabled:opacity-40"
         >
           Cancelar
         </button>
+        {!canSave && (
+          <span className="text-[12px] text-[#6B7A72]">Nome e categoria são obrigatórios.</span>
+        )}
       </div>
     </div>
   );

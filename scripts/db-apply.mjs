@@ -32,6 +32,7 @@ const files = [
   path.join(root, "supabase", "schema.sql"),
   path.join(root, "supabase", "migrations", "20260831_volume_discounts.sql"),
   path.join(root, "supabase", "migrations", "20260901_auth_multitenant.sql"),
+  path.join(root, "supabase", "migrations", "20260901_catalog_media_storage.sql"),
 ];
 
 const client = new pg.Client({

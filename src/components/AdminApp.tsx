@@ -45,10 +45,15 @@ export function AdminApp({
   const [isPublished, setIsPublished] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [saving, setSaving] = useState(false);
   const hydrated = useRef(false);
   const skipBrandSave = useRef(true);
+
+  function showToast(message: string, type: "success" | "error" = "success") {
+    setToast({ message, type });
+    window.setTimeout(() => setToast(null), type === "error" ? 6000 : 4000);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -102,8 +107,7 @@ export function AdminApp({
           await saveBrandAndColors(catalogId, brand, colors);
         } catch (err) {
           const message = err instanceof Error ? err.message : "Erro ao salvar marca";
-          setToast(`✗ ${message}`);
-          window.setTimeout(() => setToast(null), 4000);
+          showToast(`✗ ${message}`, "error");
         } finally {
           setSaving(false);
         }
@@ -118,27 +122,40 @@ export function AdminApp({
     try {
       await publishCatalog(catalogId, catalogSlug);
       setIsPublished(true);
-      setToast(`✓ Catálogo publicado em ${catalogPublicUrl(catalogSlug)}`);
+      showToast(`✓ Catálogo publicado em ${catalogPublicUrl(catalogSlug)}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao publicar";
-      setToast(`✗ ${message}`);
+      showToast(`✗ ${message}`, "error");
     }
-    window.setTimeout(() => setToast(null), 5000);
   }
 
   async function handleSaveProduct(data: Omit<Product, "id"> & { id?: number }) {
-    if (!catalogId) return;
-    const saved = await upsertProduct(catalogId, data, products.length);
-    setProducts((prev) => {
-      if (data.id) return prev.map((p) => (p.id === data.id ? saved : p));
-      return [...prev, saved];
-    });
+    if (!catalogId) throw new Error("Catálogo não carregado.");
+    try {
+      const saved = await upsertProduct(catalogId, data, products.length);
+      setProducts((prev) => {
+        if (data.id) return prev.map((p) => (p.id === data.id ? saved : p));
+        return [...prev, saved];
+      });
+      showToast("✓ Produto salvo com sucesso!");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao salvar produto";
+      showToast(`✗ ${message}`, "error");
+      throw err;
+    }
   }
 
   async function handleDeleteProduct(productId: number) {
     if (!catalogId) return;
-    await deleteProduct(catalogId, productId);
-    setProducts((prev) => prev.filter((p) => p.id !== productId));
+    try {
+      await deleteProduct(catalogId, productId);
+      setProducts((prev) => prev.filter((p) => p.id !== productId));
+      showToast("✓ Produto removido.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao excluir produto";
+      showToast(`✗ ${message}`, "error");
+      throw err;
+    }
   }
 
   function registerCustomColor(entry: ProductColorEntry) {
@@ -187,8 +204,11 @@ export function AdminApp({
       />
 
       {toast && (
-        <div className="fixed left-1/2 top-20 z-50 -translate-x-1/2 rounded-[12px] bg-[#25D366] px-4 py-3 text-[14px] font-semibold text-white shadow-lg">
-          {toast}
+        <div
+          className="fixed left-1/2 top-20 z-50 max-w-[90vw] -translate-x-1/2 rounded-[12px] px-4 py-3 text-[14px] font-semibold text-white shadow-lg"
+          style={{ background: toast.type === "error" ? "#dc2626" : "#25D366" }}
+        >
+          {toast.message}
         </div>
       )}
 
@@ -225,8 +245,9 @@ export function AdminApp({
           {tab === "marca" && (
             <BrandTab brand={brand} setBrand={setBrand} colors={colors} setColors={setColors} />
           )}
-          {tab === "produtos" && (
+          {tab === "produtos" && catalogId && (
             <ProductsTab
+              catalogId={catalogId}
               products={products}
               onSaveProduct={handleSaveProduct}
               onDeleteProduct={handleDeleteProduct}
