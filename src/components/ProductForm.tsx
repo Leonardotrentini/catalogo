@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CategorySelect } from "./CategorySelect";
 import { ColorSelect } from "./ColorSelect";
 import { SizeSelect } from "./SizeSelect";
@@ -320,20 +320,17 @@ export function ProductForm({
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[12px] text-[#A8B5AE]">A partir de</span>
-                  <input
-                    type="number"
-                    min={1}
-                    className="field-input h-10 w-20 py-2 text-center text-[13px]"
+                  <TierQtyInput
+                    key={`tier-qty-${index}`}
                     value={tier.minQty}
-                    onChange={(e) => {
-                      const minQty = Math.max(1, Number(e.target.value) || 1);
+                    onChange={(minQty) =>
                       setForm((prev) => ({
                         ...prev,
                         volumeDiscounts: prev.volumeDiscounts.map((row, i) =>
                           i === index ? { ...row, minQty } : row,
                         ),
-                      }));
-                    }}
+                      }))
+                    }
                   />
                   <span className="text-[12px] text-[#A8B5AE]">peças</span>
                   <button
@@ -690,5 +687,38 @@ export function ProductForm({
         )}
       </div>
     </div>
+  );
+}
+
+function TierQtyInput({ value, onChange }: { value: number; onChange: (minQty: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+
+  function commit(raw: string) {
+    const minQty = Math.max(1, parseInt(raw, 10) || 1);
+    setDraft(String(minQty));
+    onChange(minQty);
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      className="field-input h-10 w-20 py-2 text-center text-[13px]"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
+      onBlur={() => commit(draft)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit(draft);
+          (e.currentTarget as HTMLInputElement).blur();
+        }
+      }}
+    />
   );
 }
