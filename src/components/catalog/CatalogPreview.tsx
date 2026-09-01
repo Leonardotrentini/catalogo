@@ -538,11 +538,8 @@ function ProductSheet({
   onOpenCart: () => void;
   onGoHome: () => void;
 }) {
-  const initialColor = product.colors[0] ?? "";
-  const [index, setIndex] = useState(() =>
-    galleryIndexForColor(product, buildGallery(product), initialColor),
-  );
-  const [color, setColor] = useState(initialColor);
+  const [index, setIndex] = useState(0);
+  const [color, setColor] = useState("");
   const [size, setSize] = useState(product.sizes[0] ?? "");
   const [pickQty, setPickQty] = useState(1);
   const [pending, setPending] = useState<
