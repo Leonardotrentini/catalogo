@@ -53,6 +53,32 @@ async function syncTenantCatalog(
     return { error: "Este slug já está em uso por outro usuário" };
   }
 
+  const { data: ownedCatalog } = await admin
+    .from("catalogs")
+    .select("id, slug")
+    .eq("owner_id", userId)
+    .maybeSingle();
+
+  if (ownedCatalog) {
+    const { data: catalogSlugTaken } = await admin
+      .from("catalogs")
+      .select("id")
+      .eq("slug", catalogSlug)
+      .neq("id", ownedCatalog.id)
+      .maybeSingle();
+
+    if (catalogSlugTaken) {
+      return { error: "Este endereço já está em uso" };
+    }
+
+    await admin
+      .from("catalogs")
+      .update({ slug: catalogSlug, updated_at: new Date().toISOString() })
+      .eq("id", ownedCatalog.id);
+
+    return { catalogSlug };
+  }
+
   const { data: catalogExists } = await admin
     .from("catalogs")
     .select("id, owner_id")

@@ -38,6 +38,7 @@ export function AdminApp({
   onOpenSuperAdmin: () => void;
 }) {
   const [tab, setTab] = useState<AdminTab>("marca");
+  const [activeSlug, setActiveSlug] = useState(catalogSlug);
   const [brand, setBrand] = useState<Brand>(DEFAULT_BRAND);
   const [colors, setColors] = useState<BrandColors>(DEFAULT_COLORS);
   const [products, setProducts] = useState<Product[]>([]);
@@ -49,6 +50,17 @@ export function AdminApp({
   const [saving, setSaving] = useState(false);
   const hydrated = useRef(false);
   const skipBrandSave = useRef(true);
+
+  useEffect(() => {
+    setActiveSlug(catalogSlug);
+  }, [catalogSlug]);
+
+  function handleCatalogSlugSaved(nextSlug: string) {
+    const url = isSuperAdmin
+      ? `/admin?slug=${encodeURIComponent(nextSlug)}`
+      : "/admin";
+    window.location.assign(url);
+  }
 
   function showToast(message: string, type: "success" | "error" = "success") {
     setToast({ message, type });
@@ -65,7 +77,7 @@ export function AdminApp({
           data: { user },
         } = await supabase.auth.getUser();
 
-        const data = await loadCatalog(catalogSlug, {
+        const data = await loadCatalog(activeSlug, {
           createIfMissing: !isSuperAdmin,
           ownerId: user?.id,
         });
@@ -91,7 +103,7 @@ export function AdminApp({
     return () => {
       cancelled = true;
     };
-  }, [catalogSlug]);
+  }, [activeSlug, isSuperAdmin]);
 
   useEffect(() => {
     if (!hydrated.current || !catalogId) return;
@@ -120,9 +132,9 @@ export function AdminApp({
   async function publish() {
     if (!catalogId) return;
     try {
-      await publishCatalog(catalogId, catalogSlug);
+      await publishCatalog(catalogId, activeSlug);
       setIsPublished(true);
-      showToast(`✓ Catálogo publicado em ${catalogPublicUrl(catalogSlug)}`);
+      showToast(`✓ Catálogo publicado em ${catalogPublicUrl(activeSlug)}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao publicar";
       showToast(`✗ ${message}`, "error");
@@ -194,7 +206,7 @@ export function AdminApp({
   return (
     <div className="min-h-screen bg-[#0A1F18] text-white">
       <TopBar
-        slug={catalogSlug}
+        slug={activeSlug}
         isPublished={isPublished}
         userEmail={userEmail}
         isSuperAdmin={isSuperAdmin}
@@ -242,8 +254,16 @@ export function AdminApp({
         </nav>
 
         <main className="mx-auto max-w-[680px] px-6 py-7">
-          {tab === "marca" && (
-            <BrandTab brand={brand} setBrand={setBrand} colors={colors} setColors={setColors} />
+          {tab === "marca" && catalogId && (
+            <BrandTab
+              brand={brand}
+              setBrand={setBrand}
+              colors={colors}
+              setColors={setColors}
+              catalogId={catalogId}
+              catalogSlug={activeSlug}
+              onCatalogSlugSaved={handleCatalogSlugSaved}
+            />
           )}
           {tab === "produtos" && catalogId && (
             <ProductsTab

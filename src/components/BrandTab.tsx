@@ -4,6 +4,7 @@ import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Brand, BrandColors } from "@/lib/types";
 import { extractColorsFromDataUrl, mapExtractedToBrand } from "@/lib/extractColors";
 import { readAsDataURL } from "@/lib/utils";
+import { CatalogSlugEditor } from "./CatalogSlugEditor";
 import { HighlightsEditor } from "./HighlightsEditor";
 import { SellersEditor } from "./SellersEditor";
 import { getYoutubeEmbedUrl } from "@/lib/youtube";
@@ -46,11 +47,17 @@ export function BrandTab({
   setBrand,
   colors,
   setColors,
+  catalogId,
+  catalogSlug,
+  onCatalogSlugSaved,
 }: {
   brand: Brand;
   setBrand: Dispatch<SetStateAction<Brand>>;
   colors: BrandColors;
   setColors: Dispatch<SetStateAction<BrandColors>>;
+  catalogId?: string;
+  catalogSlug?: string;
+  onCatalogSlugSaved?: (slug: string) => void;
 }) {
   const logoRef = useRef<HTMLInputElement>(null);
   const bannerRef = useRef<HTMLInputElement>(null);
@@ -109,6 +116,14 @@ export function BrandTab({
             onChange={(e) => setBrand((prev) => ({ ...prev, name: e.target.value }))}
           />
         </label>
+
+        {catalogId && catalogSlug && onCatalogSlugSaved && (
+          <CatalogSlugEditor
+            catalogId={catalogId}
+            slug={catalogSlug}
+            onSaved={onCatalogSlugSaved}
+          />
+        )}
 
         <div>
           <span className="field-label">Logo da marca</span>
