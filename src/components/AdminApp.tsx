@@ -66,7 +66,7 @@ export function AdminApp({
         } = await supabase.auth.getUser();
 
         const data = await loadCatalog(catalogSlug, {
-          createIfMissing: true,
+          createIfMissing: !isSuperAdmin,
           ownerId: user?.id,
         });
         if (cancelled) return;

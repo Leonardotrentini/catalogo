@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AdminApp } from "@/components/AdminApp";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { Profile } from "@/lib/types";
@@ -9,6 +9,8 @@ import { VestoLogo } from "@/components/VestoLogo";
 
 export function AdminShell() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const impersonateSlug = searchParams.get("slug")?.trim().toLowerCase() || null;
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,13 @@ export function AdminShell() {
     };
   }, [router]);
 
+  useEffect(() => {
+    if (!profile || loading) return;
+    if (profile.role === "super_admin" && !impersonateSlug) {
+      router.replace("/admin/super");
+    }
+  }, [profile, impersonateSlug, loading, router]);
+
   async function handleLogout() {
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
@@ -90,45 +99,18 @@ export function AdminShell() {
     );
   }
 
-  if (profile.role === "super_admin" && !profile.catalog_slug) {
+  if (profile.role === "super_admin" && !impersonateSlug) {
     return (
-      <div className="min-h-screen bg-[#0A1F18] text-white">
-        <header className="flex items-center justify-between border-b border-[rgba(201,168,76,0.18)] px-6 py-4">
-          <div className="flex items-center gap-3">
-            <VestoLogo size={44} />
-            <div>
-              <div className="font-bold">Super Admin</div>
-              <div className="text-[12px] text-[#A8B5AE]">{profile.email}</div>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => router.push("/admin/super")}
-              className="rounded-[10px] border border-[#C9A84C] px-4 py-2 text-[13px] font-semibold text-[#C9A84C]"
-            >
-              Gerenciar usuários
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleLogout()}
-              className="rounded-[10px] bg-[#122E23] px-4 py-2 text-[13px] text-[#A8B5AE]"
-            >
-              Sair
-            </button>
-          </div>
-        </header>
-        <main className="mx-auto max-w-lg px-6 py-16 text-center">
-          <p className="text-[18px] font-semibold">Painel de administração</p>
-          <p className="mt-2 text-[14px] text-[#A8B5AE]">
-            Como super admin, você gerencia lojistas e catálogos. Use o botão acima para criar e controlar usuários.
-          </p>
-        </main>
+      <div className="flex min-h-screen items-center justify-center bg-[#0A1F18] text-[#A8B5AE]">
+        Redirecionando…
       </div>
     );
   }
 
-  if (!profile.catalog_slug) {
+  const catalogSlug =
+    profile.role === "super_admin" && impersonateSlug ? impersonateSlug : profile.catalog_slug;
+
+  if (!catalogSlug) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#0A1F18] px-6 text-center text-white">
         <p className="text-[16px] font-semibold">Catálogo não configurado</p>
@@ -139,7 +121,7 @@ export function AdminShell() {
 
   return (
     <AdminApp
-      catalogSlug={profile.catalog_slug}
+      catalogSlug={catalogSlug}
       userEmail={profile.email}
       isSuperAdmin={profile.role === "super_admin"}
       onLogout={() => void handleLogout()}

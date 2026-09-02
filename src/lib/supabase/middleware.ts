@@ -41,8 +41,40 @@ export async function updateSession(request: NextRequest) {
 
   if (isLogin && user) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/admin";
+    const slug = redirectUrl.searchParams.get("slug")?.trim().toLowerCase() || "";
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile?.role === "super_admin") {
+      redirectUrl.pathname = slug ? "/admin" : "/admin/super";
+      if (slug) redirectUrl.searchParams.set("slug", slug);
+      else redirectUrl.searchParams.delete("slug");
+    } else {
+      redirectUrl.pathname = "/admin";
+      redirectUrl.searchParams.delete("slug");
+    }
     return NextResponse.redirect(redirectUrl);
+  }
+
+  if (user && pathname === "/admin") {
+    const slug = request.nextUrl.searchParams.get("slug")?.trim();
+    if (!slug) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, is_active")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profile?.role === "super_admin" && profile?.is_active) {
+        const redirectUrl = request.nextUrl.clone();
+        redirectUrl.pathname = "/admin/super";
+        redirectUrl.searchParams.delete("slug");
+        return NextResponse.redirect(redirectUrl);
+      }
+    }
   }
 
   if (user && pathname.startsWith("/admin/super")) {

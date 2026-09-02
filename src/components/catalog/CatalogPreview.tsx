@@ -908,10 +908,20 @@ function ProductSheet({
               >
                 −
               </button>
-              <span className="min-w-8 text-center text-[16px] font-bold">{pickQty}</span>
+              <PickQtyInput
+                value={pickQty}
+                max={product.qty > 0 ? product.qty : undefined}
+                onChange={setPickQty}
+              />
               <button
                 type="button"
-                onClick={() => setPickQty((q) => q + 1)}
+                onClick={() =>
+                  setPickQty((q) => {
+                    const max = product.qty > 0 ? product.qty : undefined;
+                    const next = q + 1;
+                    return max !== undefined ? Math.min(max, next) : next;
+                  })
+                }
                 className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#2a2a2e] text-lg"
               >
                 +
@@ -1573,5 +1583,48 @@ function CartSheet({
         )}
       </div>
     </div>
+  );
+}
+
+function PickQtyInput({
+  value,
+  max,
+  onChange,
+}: {
+  value: number;
+  max?: number;
+  onChange: (qty: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+
+  function commit(raw: string) {
+    let qty = Math.max(1, parseInt(raw, 10) || 1);
+    if (max !== undefined) qty = Math.min(max, qty);
+    setDraft(String(qty));
+    onChange(qty);
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      aria-label="Quantidade"
+      className="h-10 w-12 rounded-[8px] border border-transparent bg-transparent text-center text-[16px] font-bold outline-none focus:border-[#C9A84C]"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
+      onBlur={() => commit(draft)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit(draft);
+          (e.currentTarget as HTMLInputElement).blur();
+        }
+      }}
+    />
   );
 }

@@ -29,7 +29,24 @@ export function LoginForm({
       const supabase = createSupabaseBrowserClient();
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
-      router.replace(redirectTo);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Sessão não iniciada.");
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profile?.role === "super_admin") {
+        const slug = catalogSlug?.trim().toLowerCase();
+        router.replace(slug ? `/admin?slug=${encodeURIComponent(slug)}` : "/admin/super");
+      } else {
+        router.replace(redirectTo);
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha no login");
