@@ -7,6 +7,12 @@ export async function middleware(request: NextRequest) {
   const slug = getCatalogSlugFromHost(host);
   const { pathname } = request.nextUrl;
 
+  if (pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
   if (
     slug &&
     !pathname.startsWith("/api") &&

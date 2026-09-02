@@ -3,7 +3,8 @@ import { normalizeHighlightStyle, normalizeHighlights } from "@/lib/highlights";
 import { normalizeVolumeDiscounts } from "@/lib/pricing";
 import { normalizeBrandSellers, normalizeSellers, primaryWhatsAppDigits } from "@/lib/sellers";
 import type { Brand, BrandColors, Product, ProductImage, VideoItem } from "@/lib/types";
-import { createSupabaseServerClient } from "./server";
+import { createSupabaseAdminClient } from "./admin";
+import { createSupabasePublicServerClient } from "./public-server";
 
 function normalizeBrand(raw: Partial<Brand> | null | undefined): Brand {
   const merged = { ...DEFAULT_BRAND, ...(raw ?? {}) };
@@ -63,37 +64,56 @@ function mapProduct(row: ProductRow): Product {
   };
 }
 
+function getCatalogDb() {
+  try {
+    return createSupabaseAdminClient();
+  } catch {
+    return createSupabasePublicServerClient();
+  }
+}
+
 export async function loadPublishedCatalog(slug: string): Promise<{
   brand: Brand;
   colors: BrandColors;
   products: Product[];
 } | null> {
-  const supabase = await createSupabaseServerClient();
+  try {
+    const supabase = getCatalogDb();
 
-  const { data: catalog, error } = await supabase
-    .from("catalogs")
-    .select("id, slug, brand, colors, is_published")
-    .eq("slug", slug)
-    .eq("is_published", true)
-    .maybeSingle();
+    const { data: catalog, error } = await supabase
+      .from("catalogs")
+      .select("id, slug, brand, colors, is_published")
+      .eq("slug", slug)
+      .eq("is_published", true)
+      .maybeSingle();
 
-  if (error) throw error;
-  if (!catalog) return null;
+    if (error) {
+      console.error("[loadPublishedCatalog] catalogs:", error.message);
+      return null;
+    }
+    if (!catalog) return null;
 
-  const row = catalog as CatalogRow;
+    const row = catalog as CatalogRow;
 
-  const { data: productRows, error: productsError } = await supabase
-    .from("products")
-    .select("*")
-    .eq("catalog_id", row.id)
-    .order("sort_order", { ascending: true })
-    .order("id", { ascending: true });
+    const { data: productRows, error: productsError } = await supabase
+      .from("products")
+      .select("*")
+      .eq("catalog_id", row.id)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true });
 
-  if (productsError) throw productsError;
+    if (productsError) {
+      console.error("[loadPublishedCatalog] products:", productsError.message);
+      return null;
+    }
 
-  return {
-    brand: normalizeBrand(row.brand),
-    colors: { ...DEFAULT_COLORS, ...(row.colors ?? {}) },
-    products: (productRows as ProductRow[] | null)?.map(mapProduct) ?? [],
-  };
+    return {
+      brand: normalizeBrand(row.brand),
+      colors: { ...DEFAULT_COLORS, ...(row.colors ?? {}) },
+      products: (productRows as ProductRow[] | null)?.map(mapProduct) ?? [],
+    };
+  } catch (err) {
+    console.error("[loadPublishedCatalog]", err);
+    return null;
+  }
 }
