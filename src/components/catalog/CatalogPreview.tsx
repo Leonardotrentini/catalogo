@@ -671,6 +671,7 @@ function ProductSheet({
           background: "#111113",
           borderRadius: "20px 20px 0 0",
           maxHeight: "92vh",
+          paddingBottom: "env(safe-area-inset-bottom)",
           color: colors.text,
         }}
       >
@@ -773,7 +774,7 @@ function ProductSheet({
           </div>
         </div>
 
-        <div className="px-4 pb-8 pt-4">
+        <div className="px-4 pb-[calc(env(safe-area-inset-bottom)+32px)] pt-4">
           <div className="text-[11px] uppercase tracking-[0.06em] text-[#555]">{product.category}</div>
           <h2 className="mt-1 text-[20px] font-bold leading-[1.2]">{product.name}</h2>
           <div className="mt-2 text-[24px] font-bold" style={{ color: colors.accent }}>
@@ -1313,7 +1314,12 @@ function CartSheet({
       />
       <div
         className="sheet-up absolute bottom-0 left-0 right-0 flex max-h-[92vh] flex-col overflow-hidden"
-        style={{ background: colors.primary, borderRadius: "20px 20px 0 0", color: colors.text }}
+        style={{
+          background: colors.primary,
+          borderRadius: "20px 20px 0 0",
+          paddingBottom: "env(safe-area-inset-bottom)",
+          color: colors.text,
+        }}
       >
         <div className="mx-auto mt-[10px] h-1 w-9 rounded-[2px] bg-[#333]" />
 
@@ -1583,7 +1589,10 @@ function CartSheet({
         </div>
 
         {cart.length > 0 && (
-          <div className="border-t border-white/5 px-4 py-4">
+          <div
+            className="border-t border-white/5 px-4 pt-4"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}
+          >
             <button
               type="button"
               onClick={sendWhatsApp}
