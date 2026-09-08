@@ -1352,7 +1352,7 @@ function CartSheet({
         className={sheetClass}
         style={{
           background: colors.primary,
-          paddingBottom: "env(safe-area-inset-bottom)",
+          paddingBottom: publicMode ? 0 : "env(safe-area-inset-bottom)",
           color: colors.text,
         }}
       >
