@@ -1327,9 +1327,9 @@ function CartSheet({
 
   const inputClass =
     "h-12 w-full rounded-[10px] border border-[#2a2a2e] bg-[#0A1F18] px-3 text-[14px] outline-none focus:border-[#25D366]";
-  const overlayClass = publicMode ? "fixed inset-0 z-40" : "absolute inset-0 z-40";
+  const overlayClass = publicMode ? "fixed inset-0 z-50" : "absolute inset-0 z-40";
   const sheetClass = publicMode
-    ? "sheet-up absolute bottom-0 left-0 right-0 mx-auto flex h-[92dvh] w-full max-w-[480px] max-h-[92dvh] flex-col overflow-hidden"
+    ? "sheet-up absolute inset-x-0 bottom-0 mx-auto flex h-[100dvh] w-full max-w-[480px] flex-col overflow-hidden sm:h-[92vh] sm:max-h-[92vh] sm:rounded-t-[20px]"
     : "sheet-up absolute bottom-0 left-0 right-0 flex max-h-[92vh] flex-col overflow-hidden";
 
   return (
@@ -1345,7 +1345,6 @@ function CartSheet({
         className={sheetClass}
         style={{
           background: colors.primary,
-          borderRadius: "20px 20px 0 0",
           paddingBottom: "env(safe-area-inset-bottom)",
           color: colors.text,
         }}
