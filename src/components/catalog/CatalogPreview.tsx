@@ -65,6 +65,7 @@ export function CatalogPreview({
   const [cartBump, setCartBump] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [pressedId, setPressedId] = useState<number | null>(null);
+  const [openCartAfterProductClose, setOpenCartAfterProductClose] = useState(false);
 
   useEffect(() => {
     if (!publicMode) return;
@@ -80,6 +81,12 @@ export function CatalogPreview({
       document.body.style.touchAction = previousTouchAction;
     };
   }, [activeProduct, cartOpen, publicMode]);
+
+  useEffect(() => {
+    if (!openCartAfterProductClose || activeProduct) return;
+    setCartOpen(true);
+    setOpenCartAfterProductClose(false);
+  }, [activeProduct, openCartAfterProductClose]);
 
   const storeName = brand.name.trim() || "Sua loja";
   const categories = useMemo(() => {
@@ -317,7 +324,7 @@ export function CatalogPreview({
             onOpenCart={() => {
               setActiveProduct(null);
               setActiveCategory(null);
-              setCartOpen(true);
+              setOpenCartAfterProductClose(true);
             }}
             onGoHome={() => {
               setActiveProduct(null);
@@ -659,9 +666,7 @@ function ProductSheet({
 
   function finishAndOpenCart() {
     setSuccessOpen(false);
-    window.setTimeout(() => {
-      onOpenCart();
-    }, 20);
+    onOpenCart();
   }
 
   function continueShopping() {
