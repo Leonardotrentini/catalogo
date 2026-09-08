@@ -66,6 +66,21 @@ export function CatalogPreview({
   const [toast, setToast] = useState<string | null>(null);
   const [pressedId, setPressedId] = useState<number | null>(null);
 
+  useEffect(() => {
+    if (!publicMode) return;
+    if (!cartOpen && !activeProduct) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
+    };
+  }, [activeProduct, cartOpen, publicMode]);
+
   const storeName = brand.name.trim() || "Sua loja";
   const categories = useMemo(() => {
     const names = [...new Set(products.map((p) => p.category).filter(Boolean))];
@@ -295,6 +310,7 @@ export function CatalogPreview({
             product={activeProduct}
             colors={colors}
             cart={cart}
+            publicMode={publicMode}
             colorLabel={colorLabel}
             onClose={() => setActiveProduct(null)}
             onAdd={(item, options) => addToCart(item, options)}
@@ -316,6 +332,7 @@ export function CatalogPreview({
             colors={colors}
             cart={cart}
             products={products}
+            publicMode={publicMode}
             setCart={setCart}
             onClose={() => setCartOpen(false)}
           />
@@ -523,6 +540,7 @@ function ProductSheet({
   product,
   colors,
   cart,
+  publicMode,
   colorLabel,
   onClose,
   onAdd,
@@ -532,6 +550,7 @@ function ProductSheet({
   product: Product;
   colors: BrandColors;
   cart: CartItem[];
+  publicMode: boolean;
   colorLabel: (hex: string) => string;
   onClose: () => void;
   onAdd: (item: Omit<CartItem, "key">, options?: { silent?: boolean }) => void;
@@ -655,9 +674,13 @@ function ProductSheet({
 
   const canInclude =
     (product.colors.length === 0 || color) && (product.sizes.length === 0 || size);
+  const overlayClass = publicMode ? "fixed inset-0 z-40" : "absolute inset-0 z-40";
+  const sheetClass = publicMode
+    ? "sheet-up absolute bottom-0 left-0 right-0 mx-auto w-full max-w-[480px] overflow-y-auto"
+    : "sheet-up absolute bottom-0 left-0 right-0 overflow-y-auto";
 
   return (
-    <div className="absolute inset-0 z-40">
+    <div className={overlayClass}>
       <button
         type="button"
         className="absolute inset-0"
@@ -666,7 +689,7 @@ function ProductSheet({
         aria-label="Fechar"
       />
       <div
-        className="sheet-up absolute bottom-0 left-0 right-0 overflow-y-auto"
+        className={sheetClass}
         style={{
           background: "#111113",
           borderRadius: "20px 20px 0 0",
@@ -1143,6 +1166,7 @@ function CartSheet({
   colors,
   cart,
   products,
+  publicMode,
   setCart,
   onClose,
 }: {
@@ -1150,6 +1174,7 @@ function CartSheet({
   colors: BrandColors;
   cart: CartItem[];
   products: Product[];
+  publicMode: boolean;
   setCart: (next: CartItem[]) => void;
   onClose: () => void;
 }) {
@@ -1302,9 +1327,13 @@ function CartSheet({
 
   const inputClass =
     "h-12 w-full rounded-[10px] border border-[#2a2a2e] bg-[#0A1F18] px-3 text-[14px] outline-none focus:border-[#25D366]";
+  const overlayClass = publicMode ? "fixed inset-0 z-40" : "absolute inset-0 z-40";
+  const sheetClass = publicMode
+    ? "sheet-up absolute bottom-0 left-0 right-0 mx-auto flex w-full max-w-[480px] max-h-[92vh] flex-col overflow-hidden"
+    : "sheet-up absolute bottom-0 left-0 right-0 flex max-h-[92vh] flex-col overflow-hidden";
 
   return (
-    <div className="absolute inset-0 z-40">
+    <div className={overlayClass}>
       <button
         type="button"
         className="absolute inset-0"
@@ -1313,7 +1342,7 @@ function CartSheet({
         aria-label="Fechar"
       />
       <div
-        className="sheet-up absolute bottom-0 left-0 right-0 flex max-h-[92vh] flex-col overflow-hidden"
+        className={sheetClass}
         style={{
           background: colors.primary,
           borderRadius: "20px 20px 0 0",
