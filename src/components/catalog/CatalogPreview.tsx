@@ -659,7 +659,9 @@ function ProductSheet({
 
   function finishAndOpenCart() {
     setSuccessOpen(false);
-    onOpenCart();
+    window.setTimeout(() => {
+      onOpenCart();
+    }, 20);
   }
 
   function continueShopping() {
