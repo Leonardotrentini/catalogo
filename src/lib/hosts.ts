@@ -1,4 +1,4 @@
-const DEFAULT_ROOT_DOMAIN = "catalogo.vercel.app";
+const DEFAULT_ROOT_DOMAIN = "catalogovesto.vercel.app";
 
 export function getRootDomain(): string {
   return process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() || DEFAULT_ROOT_DOMAIN;
@@ -40,7 +40,7 @@ export function isAppRootHostname(host: string): boolean {
   return false;
 }
 
-/** Extrai o slug do subdomínio (ex.: baseset.catalogo.vercel.app → baseset). */
+/** Extrai o slug do subdomínio (ex.: baseset.catalogovesto.vercel.app → baseset). */
 export function getCatalogSlugFromHost(host: string): string | null {
   const hostname = host.split(":")[0].toLowerCase();
   if (isAppRootHostname(hostname)) return null;

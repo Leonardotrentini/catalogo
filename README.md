@@ -41,7 +41,7 @@ Após login com o e-mail configurado em `SUPER_ADMIN_EMAIL`:
 
 1. O lojista edita marca e produtos em `/admin`
 2. Clica em **Publicar**
-3. O catálogo fica visível em `{slug}.{NEXT_PUBLIC_ROOT_DOMAIN}` (ex.: `baseset.catalogo.vercel.app`)
+3. O catálogo fica visível em `{slug}.{NEXT_PUBLIC_ROOT_DOMAIN}` (ex.: `baseset.catalogovesto.vercel.app`)
 
 Enquanto não publicado, a URL retorna 404 para visitantes.
 
@@ -57,24 +57,24 @@ Em **Settings → Environment Variables** (Production, Preview e Development):
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Chave publishable (`sb_publishable_…`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Chave service role (somente servidor) |
 | `SUPER_ADMIN_EMAIL` | Seu e-mail de super admin |
-| `NEXT_PUBLIC_ROOT_DOMAIN` | Domínio raiz, ex.: `catalogo.vercel.app` |
+| `NEXT_PUBLIC_ROOT_DOMAIN` | Domínio raiz, ex.: `catalogovesto.vercel.app` |
 
 ### 2. Subdomínios wildcard
 
-Para URLs como `baseset.catalogo.vercel.app`:
+Para URLs como `baseset.catalogovesto.vercel.app`:
 
-1. Na Vercel, em **Settings → Domains**, adicione `catalogo.vercel.app` (ou seu domínio customizado)
-2. Adicione também `*.catalogo.vercel.app` (wildcard)
-3. Configure `NEXT_PUBLIC_ROOT_DOMAIN=catalogo.vercel.app`
+1. Na Vercel, em **Settings → Domains**, adicione `catalogovesto.vercel.app` (ou seu domínio customizado)
+2. Adicione também `*.catalogovesto.vercel.app` (wildcard)
+3. Configure `NEXT_PUBLIC_ROOT_DOMAIN=catalogovesto.vercel.app`
 
-O middleware reescreve `{slug}.catalogo.vercel.app` → catálogo publicado do slug.
+O middleware reescreve `{slug}.catalogovesto.vercel.app` → catálogo publicado do slug.
 
 ### 3. Supabase Auth
 
 Em **Authentication → URL Configuration**:
 
-- **Site URL**: `https://catalogo.vercel.app` (ou seu domínio)
-- **Redirect URLs**: `https://catalogo.vercel.app/auth/callback`, `http://localhost:3000/auth/callback`
+- **Site URL**: `https://catalogovesto.vercel.app` (ou seu domínio)
+- **Redirect URLs**: `https://catalogovesto.vercel.app/auth/callback`, `http://localhost:3000/auth/callback`
 
 ### 4. Deploy
 
