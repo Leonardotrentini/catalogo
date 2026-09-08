@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Brand, BrandColors, CartItem, Product, ProductColorEntry } from "@/lib/types";
 import {
   colorNameFromHex,
@@ -1152,12 +1152,25 @@ function CartSheet({
   setCart: (next: CartItem[]) => void;
   onClose: () => void;
 }) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const [customerPhone, setCustomerPhone] = useState("+55 ");
   const [customerName, setCustomerName] = useState("");
   const [customerCep, setCustomerCep] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const sellers = useMemo(() => normalizeSellers(brand), [brand]);
   const [sellerId, setSellerId] = useState("");
+
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+
+    node.scrollTop = 0;
+    const frame = window.requestAnimationFrame(() => {
+      node.scrollTop = 0;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     if (sellers.length === 0) {
@@ -1304,7 +1317,7 @@ function CartSheet({
       >
         <div className="mx-auto mt-[10px] h-1 w-9 rounded-[2px] bg-[#333]" />
 
-        <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-4">
           <h2 className="pt-2 text-[22px] font-bold" style={{ color: "#25D366" }}>
             Carrinho
           </h2>
