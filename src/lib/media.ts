@@ -32,17 +32,14 @@ export function filterGalleryByColor(items: GalleryItem[], color: string): Galle
   return matched.length > 0 ? matched : items;
 }
 
+/** Image used on grids/home — never the video file (saves egress). */
 export function productThumbSrc(product: Product): string {
-  const images = normalizeImages(product.images);
-  if (prefersVideoCover(product)) {
-    const file = product.videos.find((v) => v.type === "file");
-    if (file) return file.src;
-  }
-  return images[0]?.src ?? "";
+  return normalizeImages(product.images)[0]?.src ?? "";
 }
 
+/** True when product has a file video (for play badge on photo cover). */
 export function productThumbIsVideo(product: Product): boolean {
-  return prefersVideoCover(product) && product.videos.some((v) => v.type === "file");
+  return product.videos.some((v) => v.type === "file" || (v.type === "link" && Boolean(v.src)));
 }
 
 export function productThumbPoster(product: Product): string {

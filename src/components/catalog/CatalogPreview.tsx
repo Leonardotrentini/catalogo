@@ -17,7 +17,7 @@ import {
   productThumbPoster,
   productThumbSrc,
 } from "@/lib/media";
-import { ProductThumbMedia, VideoCoverThumb } from "@/components/ProductThumbMedia";
+import { ProductThumbMedia } from "@/components/ProductThumbMedia";
 import { HighlightStrip } from "@/components/HighlightStrip";
 import { InstagramIcon } from "@/components/InstagramIcon";
 import { WhatsAppIcon } from "@/components/WhatsAppIcon";
@@ -93,7 +93,7 @@ export function CatalogPreview({
     const names = [...new Set(products.map((p) => p.category).filter(Boolean))];
     return names.map((name) => {
       const items = products.filter((p) => p.category === name);
-      const withThumb = items.find((p) => productThumbSrc(p));
+      const withThumb = items.find((p) => productThumbSrc(p)) ?? items.find((p) => p.videos.length > 0);
       return {
         name,
         count: items.length,
@@ -441,11 +441,26 @@ function HomeView({
               className={`relative w-full ${categories.length === 1 ? "aspect-[4/5]" : "aspect-[4/5]"}`}
               style={{ background: withAlpha(colors.primary, 0.65) }}
             >
-              {cat.coverVideo && cat.cover ? (
-                <VideoCoverThumb src={cat.cover} poster={cat.coverPoster} />
-              ) : cat.cover ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={cat.cover} alt="" className="h-full w-full object-contain" />
+              {cat.cover || cat.coverPoster ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={cat.coverPoster || cat.cover}
+                    alt=""
+                    className="h-full w-full object-contain"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  {cat.coverVideo && (
+                    <span
+                      className="pointer-events-none absolute bottom-3 right-3 z-[1] flex h-8 w-8 items-center justify-center rounded-full"
+                      style={{ background: "rgba(0,0,0,0.55)" }}
+                      aria-hidden
+                    >
+                      <span className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[10px] border-y-transparent border-l-white" />
+                    </span>
+                  )}
+                </>
               ) : (
                 <div
                   className="h-full w-full"
@@ -715,6 +730,7 @@ function ProductSheet({
               controls
               autoPlay
               playsInline
+              preload="auto"
             />
           ) : current?.kind === "video" && yt ? (
             <iframe
@@ -732,6 +748,7 @@ function ProductSheet({
               controls
               autoPlay
               playsInline
+              preload="auto"
             />
           ) : current?.src ? (
             // eslint-disable-next-line @next/next/no-img-element
