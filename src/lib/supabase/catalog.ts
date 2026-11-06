@@ -2,6 +2,9 @@ import { DEFAULT_BRAND, DEFAULT_COLORS } from "@/lib/constants";
 import { normalizeHighlightStyle, normalizeHighlights } from "@/lib/highlights";
 import { normalizeVolumeDiscounts } from "@/lib/pricing";
 import { normalizeBrandSellers, normalizeSellers, primaryWhatsAppDigits } from "@/lib/sellers";
+import { normalizeCategories } from "@/lib/categories";
+import { normalizeStock } from "@/lib/stock";
+import { normalizeVideoPosition } from "@/lib/youtube";
 import type { Brand, BrandColors, Product, ProductImage, VideoItem } from "@/lib/types";
 import { getSupabase } from "./client";
 
@@ -20,6 +23,10 @@ function normalizeBrand(raw: Partial<Brand> | null | undefined): Brand {
     highlightStyle: normalizeHighlightStyle(merged.highlightStyle),
     checkoutButtonText: merged.checkoutButtonText?.trim() || DEFAULT_BRAND.checkoutButtonText,
     checkoutButtonColor: merged.checkoutButtonColor?.trim() || DEFAULT_BRAND.checkoutButtonColor,
+    videoPosition: normalizeVideoPosition(merged.videoPosition),
+    videoTitle: typeof merged.videoTitle === "string" ? merged.videoTitle : undefined,
+    stockControl: merged.stockControl === true,
+    categories: normalizeCategories(merged.categories),
     customProductColors: Array.isArray(merged.customProductColors)
       ? merged.customProductColors
           .filter((c) => c && typeof c.name === "string" && typeof c.hex === "string")
@@ -42,6 +49,7 @@ type ProductRow = {
   name: string;
   category: string;
   qty: number;
+  stock?: unknown;
   sizes: string[] | null;
   price: string;
   colors: string[] | null;
@@ -59,6 +67,7 @@ function mapProduct(row: ProductRow): Product {
     name: row.name ?? "",
     category: row.category ?? "",
     qty: row.qty ?? 0,
+    stock: normalizeStock(row.stock),
     sizes: row.sizes ?? [],
     price: row.price ?? "",
     colors: row.colors ?? [],
@@ -166,11 +175,12 @@ export async function upsertProduct(
   product: Omit<Product, "id"> & { id?: number },
   sortOrder?: number,
 ): Promise<Product> {
-  const payload = {
+  const base = {
     catalog_id: catalogId,
     name: product.name,
     category: product.category,
     qty: product.qty,
+    stock: product.stock ?? null,
     sizes: product.sizes,
     price: product.price,
     colors: product.colors,
@@ -179,11 +189,12 @@ export async function upsertProduct(
     description: product.description,
     cover_type: product.coverType ?? null,
     volume_discounts: normalizeVolumeDiscounts(product.volumeDiscounts, product.price),
-    sort_order: sortOrder ?? 0,
     updated_at: new Date().toISOString(),
   };
 
   if (product.id) {
+    const payload =
+      sortOrder === undefined ? base : { ...base, sort_order: sortOrder };
     const { data, error } = await getSupabase()
       .from("products")
       .update(payload)
@@ -196,9 +207,29 @@ export async function upsertProduct(
     return mapProduct(data as ProductRow);
   }
 
-  const { data, error } = await getSupabase().from("products").insert(payload).select("*").single();
+  const { data, error } = await getSupabase()
+    .from("products")
+    .insert({ ...base, sort_order: sortOrder ?? 0 })
+    .select("*")
+    .single();
   if (error) throw error;
   return mapProduct(data as ProductRow);
+}
+
+export async function reorderProducts(
+  catalogId: string,
+  orderedIds: number[],
+): Promise<void> {
+  const updates = orderedIds.map((id, index) =>
+    getSupabase()
+      .from("products")
+      .update({ sort_order: index, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("catalog_id", catalogId),
+  );
+  const results = await Promise.all(updates);
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw failed.error;
 }
 
 export async function deleteProduct(catalogId: string, productId: number): Promise<void> {

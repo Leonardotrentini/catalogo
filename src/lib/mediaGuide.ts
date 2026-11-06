@@ -66,4 +66,4 @@ export const PRODUCT_PHOTO_GUIDE =
   "Recomendado para mobile: 800×800px (1:1) — a foto aparece inteira no catálogo.";
 
 export const PRODUCT_VIDEO_GUIDE =
-  "Recomendado para mobile: vídeo vertical 9:16 ou quadrado 1:1 — aparece sem cortes.";
+  "Cole o link do YouTube ou Shorts. Arraste para o início para abrir o produto no vídeo (a CAPA da grade continua sendo a 1ª foto).";

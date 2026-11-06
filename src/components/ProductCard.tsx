@@ -4,18 +4,33 @@ import type { Product } from "@/lib/types";
 import { productThumbSrc } from "@/lib/media";
 import { ProductThumbMedia } from "@/components/ProductThumbMedia";
 import { hasVolumePricing, lowestTierUnitPrice } from "@/lib/pricing";
+import { sizeStock, usesStockMatrix } from "@/lib/stock";
 import { formatMoney } from "@/lib/utils";
 
 export function ProductCard({
   product,
   busy,
+  selected,
+  dragging,
+  stockControl = false,
   onEdit,
+  onDuplicate,
   onDelete,
+  onDragStart,
+  onDragEnd,
+  onDropOn,
 }: {
   product: Product;
   busy?: boolean;
+  selected?: boolean;
+  dragging?: boolean;
+  stockControl?: boolean;
   onEdit: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDropOn: () => void;
 }) {
   const hasThumb = Boolean(productThumbSrc(product));
   const isDraft = !product.price || product.images.length === 0;
@@ -48,9 +63,44 @@ export function ProductCard({
           onEdit();
         }
       }}
-      className="group cursor-pointer rounded-[14px] border border-[rgba(201,168,76,0.14)] bg-[#122E23] p-3.5 transition hover:border-[rgba(201,168,76,0.28)] hover:bg-[#142f24] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A84C]"
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDropOn();
+      }}
+      className={[
+        "group cursor-pointer rounded-[14px] border bg-[#122E23] p-3.5 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A84C]",
+        selected
+          ? "border-[#C9A84C] bg-[#142f24]"
+          : "border-[rgba(201,168,76,0.14)] hover:border-[rgba(201,168,76,0.28)] hover:bg-[#142f24]",
+        dragging ? "opacity-50" : "",
+      ].join(" ")}
     >
       <div className="flex gap-3">
+        <button
+          type="button"
+          data-card-action
+          draggable
+          title="Arrastar para reordenar"
+          aria-label={`Reordenar ${product.name}`}
+          onClick={(e) => e.stopPropagation()}
+          onDragStart={(e) => {
+            e.stopPropagation();
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", String(product.id));
+            onDragStart();
+          }}
+          onDragEnd={() => onDragEnd()}
+          className="flex w-7 shrink-0 cursor-grab touch-none items-center justify-center self-stretch rounded-[8px] text-[#6B7A72] transition hover:bg-[#0F281F] hover:text-[#C9A84C] active:cursor-grabbing"
+        >
+          <span aria-hidden className="select-none text-[14px] leading-none tracking-tighter">
+            ⋮⋮
+          </span>
+        </button>
+
         <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[12px] border border-[rgba(201,168,76,0.1)] bg-[#0F281F]">
           {hasThumb ? (
             <ProductThumbMedia product={product} className="h-full w-full object-cover" />
@@ -97,7 +147,7 @@ export function ProductCard({
                 R$ {formatMoney(product.price)}
               </div>
               <div className="mt-1 text-[12px] font-medium text-[#A8B5AE]">
-                {product.qty} un.
+                {product.qty} em estoque
               </div>
             </div>
           </div>
@@ -105,14 +155,19 @@ export function ProductCard({
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
             {visibleSizes.length > 0 ? (
               <div className="flex flex-wrap items-center gap-1">
-                {visibleSizes.map((size) => (
-                  <span
-                    key={size}
-                    className="rounded-md border border-[#1E3A2E] bg-[#0A1F18] px-1.5 py-0.5 text-[11px] font-medium text-[#A8B5AE]"
-                  >
-                    {size}
-                  </span>
-                ))}
+                {visibleSizes.map((size) => {
+                  const units = stockControl && usesStockMatrix(product) ? sizeStock(product, size) : null;
+                  return (
+                    <span
+                      key={size}
+                      className="rounded-md border border-[#1E3A2E] bg-[#0A1F18] px-1.5 py-0.5 text-[11px] font-medium text-[#A8B5AE]"
+                      style={units === 0 ? { opacity: 0.45 } : undefined}
+                    >
+                      {size}
+                      {units != null ? ` ${units}` : ""}
+                    </span>
+                  );
+                })}
                 {extraSizes > 0 && (
                   <span className="text-[11px] text-[#6B7A72]">+{extraSizes}</span>
                 )}
@@ -161,6 +216,18 @@ export function ProductCard({
                 className="h-9 rounded-[8px] border border-[#1E3A2E] px-3 text-[12px] font-medium text-[#A8B5AE] transition hover:border-[#C9A84C] hover:text-[#C9A84C]"
               >
                 Editar
+              </button>
+              <button
+                type="button"
+                data-card-action
+                disabled={busy}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDuplicate();
+                }}
+                className="h-9 rounded-[8px] border border-[#1E3A2E] px-3 text-[12px] font-medium text-[#A8B5AE] transition hover:border-[#C9A84C] hover:text-[#C9A84C] disabled:opacity-50"
+              >
+                Duplicar
               </button>
               <button
                 type="button"

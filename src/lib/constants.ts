@@ -70,6 +70,7 @@ export const DEFAULT_BRAND: Brand = {
   highlightStyle: "pill",
   checkoutButtonText: "Finalizar pedido",
   checkoutButtonColor: "#25D366",
+  stockControl: false,
 };
 
 export const demoProducts: Product[] = [

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { CatalogPreview } from "@/components/catalog/CatalogPreview";
 import { CatalogSetupGate } from "@/components/CatalogSetupGate";
 import { loadPublishedCatalog } from "@/lib/supabase/catalog-server";
+import { getYoutubeId, getYoutubePosterUrl } from "@/lib/youtube";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -33,9 +34,24 @@ export default async function PublicCatalogPage({ params }: Props) {
     return <CatalogSetupGate slug={slug} />;
   }
 
+  const poster = getYoutubeId(data.brand.videoUrl) ? getYoutubePosterUrl(data.brand.videoUrl) : null;
+
   return (
     <div className="min-h-screen" style={{ background: data.colors.primary }}>
-      <CatalogPreview brand={data.brand} colors={data.colors} products={data.products} publicMode />
+      {poster ? (
+        <>
+          <link rel="preconnect" href="https://i.ytimg.com" />
+          <link rel="preconnect" href="https://www.youtube-nocookie.com" />
+          <link rel="preload" as="image" href={poster} fetchPriority="high" />
+        </>
+      ) : null}
+      <CatalogPreview
+        brand={data.brand}
+        colors={data.colors}
+        products={data.products}
+        publicMode
+        catalogSlug={slug}
+      />
     </div>
   );
 }

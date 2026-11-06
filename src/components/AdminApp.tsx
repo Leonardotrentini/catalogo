@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { BrandTab } from "./BrandTab";
+import { CouponsTab } from "./CouponsTab";
+import { IntegrationsTab } from "./IntegrationsTab";
 import { PreviewTab } from "./PreviewTab";
 import { ProductsTab } from "./ProductsTab";
 import { TopBar } from "./TopBar";
@@ -13,6 +15,7 @@ import {
   loadCatalog,
   publishCatalog,
   saveBrandAndColors,
+  reorderProducts,
   upsertProduct,
 } from "@/lib/supabase/catalog";
 import { catalogPublicUrl } from "@/lib/hosts";
@@ -21,6 +24,8 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 const TABS: { id: AdminTab; label: string }[] = [
   { id: "marca", label: "Marca" },
   { id: "produtos", label: "Produtos" },
+  { id: "cupons", label: "Cupons" },
+  { id: "integracoes", label: "Integrações" },
   { id: "preview", label: "Preview" },
 ];
 
@@ -144,7 +149,11 @@ export function AdminApp({
   async function handleSaveProduct(data: Omit<Product, "id"> & { id?: number }) {
     if (!catalogId) throw new Error("Catálogo não carregado.");
     try {
-      const saved = await upsertProduct(catalogId, data, products.length);
+      const saved = await upsertProduct(
+        catalogId,
+        data,
+        data.id ? undefined : products.length,
+      );
       setProducts((prev) => {
         if (data.id) return prev.map((p) => (p.id === data.id ? saved : p));
         return [...prev, saved];
@@ -167,6 +176,22 @@ export function AdminApp({
       const message = err instanceof Error ? err.message : "Erro ao excluir produto";
       showToast(`✗ ${message}`, "error");
       throw err;
+    }
+  }
+
+  async function handleReorderProducts(ordered: Product[]) {
+    if (!catalogId) return;
+    const previous = products;
+    setProducts(ordered);
+    try {
+      await reorderProducts(
+        catalogId,
+        ordered.map((p) => p.id),
+      );
+    } catch (err) {
+      setProducts(previous);
+      const message = err instanceof Error ? err.message : "Erro ao reordenar";
+      showToast(`✗ ${message}`, "error");
     }
   }
 
@@ -205,19 +230,51 @@ export function AdminApp({
 
   return (
     <div className="min-h-screen bg-[#0A1F18] text-white">
-      <TopBar
-        slug={activeSlug}
-        isPublished={isPublished}
-        userEmail={userEmail}
-        isSuperAdmin={isSuperAdmin}
-        onPublish={publish}
-        onLogout={onLogout}
-        onOpenSuperAdmin={onOpenSuperAdmin}
-      />
+      <div className="sticky top-0 z-40">
+        <TopBar
+          slug={activeSlug}
+          isPublished={isPublished}
+          userEmail={userEmail}
+          isSuperAdmin={isSuperAdmin}
+          onPublish={publish}
+          onLogout={onLogout}
+          onOpenSuperAdmin={onOpenSuperAdmin}
+        />
+
+        <nav className="border-b border-[rgba(201,168,76,0.1)] bg-[#0A1F18]/95 px-4 py-3 backdrop-blur-md">
+          <div className="mx-auto flex max-w-[680px] justify-center">
+            <div
+              className="inline-flex items-center gap-1 rounded-full border border-[rgba(201,168,76,0.2)] bg-[#0F281F] p-1"
+              role="tablist"
+              aria-label="Seções do painel"
+            >
+              {TABS.map((item) => {
+                const active = tab === item.id;
+                return (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    key={item.id}
+                    onClick={() => setTab(item.id)}
+                    className="h-10 min-w-[84px] rounded-full px-4 text-[13px] font-semibold tracking-wide transition"
+                    style={{
+                      color: active ? "#0A1F18" : "#A8B5AE",
+                      background: active ? "#C9A84C" : "transparent",
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </nav>
+      </div>
 
       {toast && (
         <div
-          className="fixed left-1/2 top-20 z-50 max-w-[90vw] -translate-x-1/2 rounded-[12px] px-4 py-3 text-[14px] font-semibold text-white shadow-lg"
+          className="fixed left-1/2 top-4 z-50 max-w-[90vw] -translate-x-1/2 rounded-[12px] px-4 py-3 text-[14px] font-semibold text-white shadow-lg"
           style={{ background: toast.type === "error" ? "#dc2626" : "#25D366" }}
         >
           {toast.message}
@@ -230,30 +287,7 @@ export function AdminApp({
         </div>
       )}
 
-      <div className="pt-[76px]">
-        <nav className="sticky top-[73px] z-30 border-b border-[rgba(201,168,76,0.14)] bg-[#0A1F18]/95 backdrop-blur-md">
-          <div className="mx-auto flex max-w-[680px] px-6">
-            {TABS.map((item) => {
-              const active = tab === item.id;
-              return (
-                <button
-                  type="button"
-                  key={item.id}
-                  onClick={() => setTab(item.id)}
-                  className="h-12 min-w-11 px-4 text-[14px] font-medium"
-                  style={{
-                    color: active ? "#ffffff" : "#6B7A72",
-                    borderBottom: active ? "2px solid #C9A84C" : "2px solid transparent",
-                  }}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-
-        <main className="mx-auto max-w-[680px] px-6 py-7">
+      <main className="mx-auto max-w-[680px] px-6 py-7">
           {tab === "marca" && catalogId && (
             <BrandTab
               brand={brand}
@@ -269,9 +303,20 @@ export function AdminApp({
             <ProductsTab
               catalogId={catalogId}
               products={products}
+              storedCategories={brand.categories ?? []}
+              onCategoriesChange={(categories) => setBrand((prev) => ({ ...prev, categories }))}
+              onRenameCategory={async (from, to) => {
+                const targets = products.filter((product) => product.category === from);
+                for (const product of targets) {
+                  const saved = await upsertProduct(catalogId, { ...product, category: to });
+                  setProducts((prev) => prev.map((item) => (item.id === saved.id ? saved : item)));
+                }
+              }}
               onSaveProduct={handleSaveProduct}
               onDeleteProduct={handleDeleteProduct}
+              onReorderProducts={handleReorderProducts}
               customProductColors={brand.customProductColors ?? []}
+              stockControl={brand.stockControl === true}
               onRegisterCustomColor={registerCustomColor}
             />
           )}
@@ -284,8 +329,9 @@ export function AdminApp({
               customProductColors={brand.customProductColors ?? []}
             />
           )}
-        </main>
-      </div>
+          {tab === "cupons" && catalogId && <CouponsTab catalogId={catalogId} />}
+          {tab === "integracoes" && <IntegrationsTab />}
+      </main>
     </div>
   );
 }

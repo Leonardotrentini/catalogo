@@ -13,6 +13,22 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // HTML/RSC: evita o WebView do WhatsApp/celular ficar preso em build antigo.
+  async headers() {
+    const noStore = [
+      { key: "Cache-Control", value: "private, no-cache, no-store, max-age=0, must-revalidate" },
+      { key: "Pragma", value: "no-cache" },
+      { key: "CDN-Cache-Control", value: "no-store" },
+      { key: "Vercel-CDN-Cache-Control", value: "no-store" },
+    ];
+    return [
+      { source: "/catalog/:path*", headers: noStore },
+      { source: "/admin/:path*", headers: noStore },
+      { source: "/login", headers: noStore },
+      { source: "/admin", headers: noStore },
+      { source: "/", headers: noStore },
+    ];
+  },
 };
 
 export default nextConfig;

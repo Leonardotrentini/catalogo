@@ -4,23 +4,28 @@ import { useEffect, useRef, useState } from "react";
 import { CategorySelect } from "./CategorySelect";
 import { ColorSelect } from "./ColorSelect";
 import { SizeSelect } from "./SizeSelect";
-import { normalizeImages, prefersVideoCover, reorder } from "@/lib/media";
+import {
+  applyMediaSlotOrder,
+  buildMediaSlots,
+  moveVideoToStart,
+  nextMediaOrder,
+  normalizeImages,
+  normalizeProductMedia,
+  reorder,
+  type MediaSlot,
+} from "@/lib/media";
 import {
   PRODUCT_PHOTO_GUIDE,
   PRODUCT_VIDEO_GUIDE,
   getImageDimensions,
-  getVideoDimensions,
   productPhotoUploadTip,
-  productVideoUploadTip,
 } from "@/lib/mediaGuide";
-import type { Product, ProductImage, VideoItem, VolumeDiscount, ProductColorEntry } from "@/lib/types";
+import type { Product, ProductImage, StockLine, VideoItem, VolumeDiscount, ProductColorEntry } from "@/lib/types";
+import { stockTotal, syncStockGrid } from "@/lib/stock";
 import { normalizeVolumeDiscounts } from "@/lib/pricing";
-import {
-  prepareProductMediaForSave,
-  uploadImageFile,
-  uploadVideoFile,
-} from "@/lib/mediaUpload";
+import { prepareProductMediaForSave, uploadImageFile } from "@/lib/mediaUpload";
 import { colorNameFromHex, parsePrice } from "@/lib/utils";
+import { getYoutubeThumbnailUrl, normalizeYoutubeUrl } from "@/lib/youtube";
 
 const emptyForm = {
   name: "",
@@ -34,6 +39,7 @@ const emptyForm = {
   description: "",
   coverType: undefined as "video" | "image" | undefined,
   volumeDiscounts: [] as VolumeDiscount[],
+  stock: undefined as StockLine[] | undefined,
 };
 
 export function ProductForm({
@@ -43,42 +49,48 @@ export function ProductForm({
   sizes,
   colors: colorOptions,
   customProductColors = [],
+  stockControl = false,
   onRegisterCustomColor,
+  onCreateCategory,
   onSave,
   onCancel,
 }: {
   catalogId: string;
-  initial: Product | null;
+  initial: (Omit<Product, "id"> & { id?: number }) | null;
   categories: string[];
   sizes: string[];
   colors: string[];
   customProductColors?: ProductColorEntry[];
+  stockControl?: boolean;
   onRegisterCustomColor?: (entry: ProductColorEntry) => void;
+  onCreateCategory?: (name: string) => void;
   onSave: (product: Omit<Product, "id"> & { id?: number }) => void | Promise<void>;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState(() =>
-    initial
-      ? {
-          name: initial.name,
-          category: initial.category,
-          qty: initial.qty,
-          sizes: [...initial.sizes],
-          price: initial.price,
-          colors: initial.colors,
-          images: normalizeImages(initial.images),
-          videos: initial.videos,
-          description: initial.description,
-          coverType: initial.coverType ?? (initial.videos.length > 0 ? "video" : "image"),
-          volumeDiscounts: normalizeVolumeDiscounts(initial.volumeDiscounts, initial.price),
-        }
-      : emptyForm,
-  );
+  const [form, setForm] = useState(() => {
+    if (!initial) return emptyForm;
+    const media = normalizeProductMedia(initial);
+    return {
+      name: initial.name,
+      category: initial.category,
+      qty: initial.qty,
+      sizes: [...initial.sizes],
+      price: initial.price,
+      colors: initial.colors,
+      images: media.images,
+      videos: media.videos,
+      description: initial.description,
+      coverType: media.coverType,
+      volumeDiscounts: normalizeVolumeDiscounts(initial.volumeDiscounts, initial.price),
+      stock: initial.stock
+        ? syncStockGrid(initial.stock, initial.colors, initial.sizes)
+        : undefined,
+    };
+  });
+  const [stockOn, setStockOn] = useState(() => stockControl && Array.isArray(initial?.stock));
   const [videoLink, setVideoLink] = useState("");
   const [selectedPhoto, setSelectedPhoto] = useState<number | null>(null);
-  const [selectedVideo, setSelectedVideo] = useState<number | null>(null);
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dragVideoIndex, setDragVideoIndex] = useState<number | null>(null);
+  const [dragSlot, setDragSlot] = useState<number | null>(null);
   const [mediaTip, setMediaTip] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -88,19 +100,34 @@ export function ProductForm({
     Boolean(initial?.price?.trim() && parsePrice(initial.price) > 0),
   );
   const photoRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLInputElement>(null);
   const canSave = Boolean(form.name.trim() && form.category.trim());
-  const videoCover = prefersVideoCover(form);
   const colorLabel = (hex: string) => colorNameFromHex(hex, customProductColors);
+  const mediaSlots = buildMediaSlots(form);
+  const firstImageSlot = mediaSlots.find((slot) => slot.kind === "image");
+  const linkPreview = videoLink.trim() ? getYoutubeThumbnailUrl(videoLink.trim()) : null;
 
   function setColors(next: string[]) {
     setForm((prev) => ({
       ...prev,
       colors: next,
+      stock: syncStockGrid(prev.stock, next, prev.sizes),
       images: prev.images.map((img) =>
         img.color && !next.some((c) => c.toLowerCase() === img.color?.toLowerCase())
           ? { ...img, color: undefined }
           : img,
+      ),
+    }));
+  }
+
+  function setLineQty(color: string, size: string, qty: number) {
+    const nextQty = Math.max(0, Math.floor(qty) || 0);
+    setStockOn(true);
+    setForm((prev) => ({
+      ...prev,
+      stock: syncStockGrid(prev.stock, prev.colors, prev.sizes).map((line) =>
+        line.color.toLowerCase() === color.toLowerCase() && line.size === size
+          ? { ...line, qty: nextQty }
+          : line,
       ),
     }));
   }
@@ -133,7 +160,22 @@ export function ProductForm({
         }
       }
       if (added.length > 0) {
-        setForm((prev) => ({ ...prev, images: [...prev.images, ...added] }));
+        setForm((prev) => {
+          let order = nextMediaOrder(prev.images, prev.videos);
+          const images = [
+            ...prev.images,
+            ...added.map((img) => {
+              const withOrder = { ...img, order };
+              order += 1;
+              return withOrder;
+            }),
+          ];
+          const slots = buildMediaSlots({ ...prev, images });
+          return {
+            ...prev,
+            ...applyMediaSlotOrder(images, prev.videos, slots),
+          };
+        });
         setMediaTip(tips[0] ?? null);
       }
       if (failed.length > 0) {
@@ -148,48 +190,61 @@ export function ProductForm({
     }
   }
 
-  function addVideoLink() {
-    const src = videoLink.trim();
-    if (!src) return;
-    const item: VideoItem = { type: "link", src, name: src };
-    setForm((prev) => ({
-      ...prev,
-      videos: [...prev.videos, item],
-      coverType: prev.coverType === "image" ? "image" : "video",
-    }));
+  function addVideoLink(raw?: string): boolean {
+    const src = (raw ?? videoLink).trim();
+    if (!src) return false;
+    const normalized = normalizeYoutubeUrl(src);
+    if (!normalized) {
+      setSaveError("Cole um link válido do YouTube ou Shorts (youtube.com/shorts/...).");
+      return false;
+    }
+    const already = form.videos.some(
+      (v) => normalizeYoutubeUrl(v.src) === normalized || v.src === normalized,
+    );
+    if (already) {
+      setVideoLink("");
+      setSaveError(null);
+      return true;
+    }
+    setSaveError(null);
+    setForm((prev) => {
+      const videos = [
+        ...prev.videos,
+        { type: "link" as const, src: normalized, name: "YouTube" },
+      ];
+      // New YouTube opens the product (position 0); CAPA stays the first photo.
+      const applied = moveVideoToStart(prev.images, videos, videos.length - 1);
+      return { ...prev, ...applied };
+    });
     setVideoLink("");
+    return true;
   }
 
-  async function addVideoFiles(fileList: FileList | File[]) {
-    const files = Array.from(fileList);
-    if (files.length === 0) return;
-    setUploadingMedia(true);
-    setSaveError(null);
-    const tips: string[] = [];
-    try {
-      const items: VideoItem[] = [];
-      for (const file of files) {
-        try {
-          const { width, height } = await getVideoDimensions(file);
-          const tip = productVideoUploadTip(width, height);
-          if (tip) tips.push(tip);
-        } catch {
-          // ignore dimension read errors
-        }
-        const url = await uploadVideoFile(catalogId, file);
-        items.push({ type: "file", src: url, name: file.name });
-      }
-      setForm((prev) => ({
-        ...prev,
-        videos: [...prev.videos, ...items],
-        coverType: prev.coverType === "image" ? "image" : "video",
-      }));
-      setMediaTip(tips[0] ?? null);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Falha ao enviar vídeo.");
-    } finally {
-      setUploadingMedia(false);
-    }
+  function reorderSlots(from: number, to: number) {
+    if (from === to) return;
+    setForm((prev) => {
+      const slots = reorder(buildMediaSlots(prev), from, to);
+      return { ...prev, ...applyMediaSlotOrder(prev.images, prev.videos, slots) };
+    });
+  }
+
+  function putVideoFirst(videoIndex: number) {
+    setForm((prev) => ({
+      ...prev,
+      ...moveVideoToStart(prev.images, prev.videos, videoIndex),
+    }));
+  }
+
+  function removeSlot(slot: MediaSlot) {
+    setForm((prev) => {
+      const images =
+        slot.kind === "image" ? prev.images.filter((_, idx) => idx !== slot.index) : prev.images;
+      const videos =
+        slot.kind === "video" ? prev.videos.filter((_, idx) => idx !== slot.index) : prev.videos;
+      const slots = buildMediaSlots({ images, videos, coverType: prev.coverType });
+      return { ...prev, ...applyMediaSlotOrder(images, videos, slots) };
+    });
+    if (slot.kind === "image") setSelectedPhoto(null);
   }
 
   async function handleSave() {
@@ -197,21 +252,54 @@ export function ProductForm({
       setSaveError("Preencha o nome e a categoria do produto.");
       return;
     }
+
+    let images = form.images;
+    let videos = form.videos;
+    let coverType = form.coverType;
+
+    const pending = videoLink.trim();
+    if (pending) {
+      const normalized = normalizeYoutubeUrl(pending);
+      if (!normalized) {
+        setSaveError("Cole um link válido do YouTube ou Shorts antes de salvar.");
+        return;
+      }
+      const already = videos.some(
+        (v) => normalizeYoutubeUrl(v.src) === normalized || v.src === normalized,
+      );
+      if (!already) {
+        videos = [...videos, { type: "link", src: normalized, name: "YouTube" }];
+        const applied = moveVideoToStart(images, videos, videos.length - 1);
+        images = applied.images;
+        videos = applied.videos;
+        coverType = applied.coverType;
+        setForm((prev) => ({ ...prev, ...applied }));
+        setVideoLink("");
+      }
+    }
+
     setSaving(true);
     setSaveError(null);
     setSaveProgress(null);
     try {
+      // Always stamp order from the visual gallery — source of truth for Preview.
+      const ordered = normalizeProductMedia({ images, videos, coverType });
       const media = await prepareProductMediaForSave(
         catalogId,
-        form.images,
-        form.videos,
+        ordered.images,
+        ordered.videos,
         setSaveProgress,
       );
+      const matrix =
+        stockControl && stockOn && (form.sizes.length > 0 || form.colors.length > 0)
+          ? syncStockGrid(form.stock, form.colors, form.sizes)
+          : undefined;
       await onSave({
         id: initial?.id,
         name: form.name.trim(),
         category: form.category.trim(),
-        qty: form.qty,
+        qty: matrix ? stockTotal(matrix) : form.qty,
+        stock: stockControl ? matrix : initial?.stock,
         sizes: form.sizes,
         price: form.price,
         colors: form.colors,
@@ -219,7 +307,7 @@ export function ProductForm({
         videos: media.videos,
         description: form.description,
         volumeDiscounts: normalizeVolumeDiscounts(form.volumeDiscounts, form.price),
-        coverType: form.videos.length === 0 ? "image" : (form.coverType ?? "video"),
+        coverType: ordered.coverType,
       });
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Erro ao salvar produto.");
@@ -242,14 +330,20 @@ export function ProductForm({
           />
         </label>
         <label className="block">
-          <span className="field-label">Quantidade</span>
-          <input
-            className="field-input"
-            type="number"
-            min={0}
-            value={form.qty}
-            onChange={(e) => setForm((prev) => ({ ...prev, qty: Number(e.target.value) }))}
-          />
+          <span className="field-label">Em estoque</span>
+          {stockControl && stockOn && (form.sizes.length > 0 || form.colors.length > 0) ? (
+            <div className="field-input flex items-center text-[#A8B5AE]">
+              {stockTotal(syncStockGrid(form.stock, form.colors, form.sizes))} no total
+            </div>
+          ) : (
+            <input
+              className="field-input"
+              type="number"
+              min={0}
+              value={form.qty}
+              onChange={(e) => setForm((prev) => ({ ...prev, qty: Number(e.target.value) }))}
+            />
+          )}
         </label>
         <label className="block">
           <span className="field-label">Valor (R$)</span>
@@ -374,11 +468,15 @@ export function ProductForm({
       )}
 
       <div className="mt-3">
-        <div className="field-label">Categoria</div>
+        <div className="field-label">Categoria (pasta)</div>
+        <p className="mb-2 text-[11px] leading-relaxed text-[#6B7A72]">
+          Escolha a pasta do catálogo. A peça fica dentro dela. Se precisar, crie uma categoria nova.
+        </p>
         <CategorySelect
           value={form.category}
           onChange={(category) => setForm((prev) => ({ ...prev, category }))}
           categories={categories}
+          onCreate={onCreateCategory}
         />
       </div>
 
@@ -386,7 +484,13 @@ export function ProductForm({
         <div className="field-label">Tamanhos</div>
         <SizeSelect
           value={form.sizes}
-          onChange={(next) => setForm((prev) => ({ ...prev, sizes: next }))}
+          onChange={(next) =>
+            setForm((prev) => ({
+              ...prev,
+              sizes: next,
+              stock: syncStockGrid(prev.stock, prev.colors, next),
+            }))
+          }
           sizes={sizes}
         />
       </div>
@@ -402,8 +506,21 @@ export function ProductForm({
         />
       </div>
 
+      {stockControl && (form.sizes.length > 0 || form.colors.length > 0) && (
+        <StockGrid
+          colors={form.colors}
+          sizes={form.sizes}
+          stock={syncStockGrid(form.stock, form.colors, form.sizes)}
+          colorLabel={colorLabel}
+          legacyQty={stockOn ? null : form.qty}
+          onChange={setLineQty}
+        />
+      )}
+
       <div className="mt-4">
-        <div className="field-label">Fotos do produto · clique para selecionar · arraste para definir a ordem (1ª = capa)</div>
+        <div className="field-label">
+          Galeria · arraste para ordenar · YouTube no início = abre no vídeo · CAPA = foto na grade
+        </div>
         <p className="mb-2 text-[11px] leading-relaxed text-[#6B7A72]">{PRODUCT_PHOTO_GUIDE}</p>
         <input
           ref={photoRef}
@@ -417,65 +534,98 @@ export function ProductForm({
           }}
         />
         <div className="flex flex-wrap gap-3">
-          {form.images.map((img, i) => {
-            const selected = selectedPhoto === i;
-            const isCover = !videoCover && i === 0;
+          {mediaSlots.map((slot, slotIndex) => {
+            const isFirst = slotIndex === 0;
+            const isCoverPhoto =
+              slot.kind === "image" &&
+              firstImageSlot?.kind === "image" &&
+              firstImageSlot.index === slot.index;
+            const selected = slot.kind === "image" && selectedPhoto === slot.index;
+            const ytThumb =
+              slot.kind === "video" ? getYoutubeThumbnailUrl(slot.src) : null;
+
             return (
-              <div key={`${img.src}-${i}`} className="w-[88px]">
+              <div
+                key={`${slot.kind}-${slot.index}-${slot.src}`}
+                className="w-[88px]"
+              >
                 <div className="relative">
-                  <button
-                    type="button"
+                  <div
                     draggable
-                    onDragStart={() => setDragIndex(i)}
+                    onDragStart={() => setDragSlot(slotIndex)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => {
-                      if (dragIndex === null) return;
-                      setForm((prev) => ({
-                        ...prev,
-                        coverType: "image",
-                        images: reorder(prev.images, dragIndex, i),
-                      }));
-                      setSelectedPhoto(i);
-                      setDragIndex(null);
+                      if (dragSlot === null) return;
+                      reorderSlots(dragSlot, slotIndex);
+                      setDragSlot(null);
                     }}
-                    onClick={() => setSelectedPhoto(i)}
+                    onClick={() => {
+                      if (slot.kind === "image") setSelectedPhoto(slot.index);
+                    }}
                     className="relative h-[88px] w-[88px] cursor-grab overflow-hidden rounded-[8px] transition hover:scale-[1.03] active:scale-95 active:cursor-grabbing"
                     style={{
-                      outline: selected || isCover ? "2px solid #C9A84C" : "2px solid #2a2a2e",
+                      outline:
+                        selected || isFirst || isCoverPhoto
+                          ? "2px solid #C9A84C"
+                          : "2px solid #2a2a2e",
                       outlineOffset: 2,
                       opacity: selected ? 1 : 0.92,
                     }}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.src} alt="" className="pointer-events-none h-full w-full object-cover" />
-                    {isCover && (
+                    {slot.kind === "image" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={slot.src}
+                        alt=""
+                        className="pointer-events-none h-full w-full object-cover"
+                      />
+                    ) : ytThumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={ytThumb}
+                        alt=""
+                        className="pointer-events-none h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-[#1a2744] text-[10px] font-semibold text-[#60a5fa]">
+                        YT
+                      </div>
+                    )}
+                    {slot.kind === "video" && (
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/35 text-lg text-white">
+                        ▶
+                      </span>
+                    )}
+                    {isFirst && slot.kind === "video" && (
+                      <span className="absolute left-1 top-1 rounded bg-[#C9A84C] px-1 text-[8px] font-bold text-black">
+                        PLAY
+                      </span>
+                    )}
+                    {isCoverPhoto && (
                       <span className="absolute left-1 top-1 rounded bg-[#C9A84C] px-1 text-[8px] font-bold text-black">
                         CAPA
                       </span>
                     )}
-                    {img.color && (
+                    {slot.kind === "image" && slot.color && (
                       <span
                         className="absolute bottom-1 left-1 h-3 w-3 rounded-full border border-white/40"
-                        style={{ background: img.color }}
+                        style={{ background: slot.color }}
                       />
                     )}
-                  </button>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setForm((prev) => ({ ...prev, images: prev.images.filter((_, idx) => idx !== i) }));
-                      setSelectedPhoto(null);
-                    }}
+                    onClick={() => removeSlot(slot)}
                     className="absolute -right-1 -top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/85 text-[11px] text-white hover:bg-[#ef4444]"
-                    aria-label="Remover foto"
+                    aria-label={slot.kind === "image" ? "Remover foto" : "Remover vídeo"}
                   >
                     ✕
                   </button>
                 </div>
-                {form.colors.length > 0 && (
+                {slot.kind === "image" && form.colors.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {form.colors.map((hex) => {
-                      const linked = img.color === hex;
+                      const linked = slot.color === hex;
                       return (
                         <button
                           type="button"
@@ -485,7 +635,9 @@ export function ProductForm({
                             setForm((prev) => ({
                               ...prev,
                               images: prev.images.map((item, idx) =>
-                                idx === i ? { ...item, color: linked ? undefined : hex } : item,
+                                idx === slot.index
+                                  ? { ...item, color: linked ? undefined : hex }
+                                  : item,
                               ),
                             }))
                           }
@@ -502,7 +654,21 @@ export function ProductForm({
                 )}
                 {selected && form.colors.length > 0 && (
                   <div className="mt-1 text-[10px] text-[#C9A84C]">
-                    {img.color ? colorLabel(img.color) : "Sem cor"}
+                    {slot.color ? colorLabel(slot.color) : "Sem cor"}
+                  </div>
+                )}
+                {slot.kind === "video" && (
+                  <div className="mt-1 space-y-1 text-center">
+                    <div className="text-[10px] text-[#60a5fa]">YouTube</div>
+                    {!isFirst && (
+                      <button
+                        type="button"
+                        onClick={() => putVideoFirst(slot.index)}
+                        className="w-full rounded bg-[#C9A84C] px-1 py-0.5 text-[9px] font-bold text-black"
+                      >
+                        Abrir 1º
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -519,12 +685,12 @@ export function ProductForm({
       </div>
 
       <div className="mt-4">
-        <div className="field-label">Vídeos · clique para selecionar · arraste para reordenar (1º = capa)</div>
+        <div className="field-label">Vídeo do YouTube</div>
         <p className="mb-2 text-[11px] leading-relaxed text-[#6B7A72]">{PRODUCT_VIDEO_GUIDE}</p>
         <div className="flex gap-2">
           <input
             className="field-input"
-            placeholder="YouTube / Reels / TikTok"
+            placeholder="https://youtube.com/shorts/... ou youtu.be/..."
             value={videoLink}
             onChange={(e) => setVideoLink(e.target.value)}
             onKeyDown={(e) => {
@@ -533,110 +699,33 @@ export function ProductForm({
                 addVideoLink();
               }
             }}
+            onBlur={() => {
+              if (videoLink.trim() && normalizeYoutubeUrl(videoLink)) {
+                addVideoLink();
+              }
+            }}
           />
           <button
             type="button"
-            onClick={addVideoLink}
+            onClick={() => addVideoLink()}
             className="h-11 min-w-11 rounded-[10px] border border-[#2a2a2e] px-3 text-lg transition hover:border-[#C9A84C]"
           >
             +
           </button>
         </div>
-        <input
-          ref={videoRef}
-          type="file"
-          multiple
-          accept="video/mp4,video/quicktime,.mp4,.mov"
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) void addVideoFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => videoRef.current?.click()}
-          className="mt-2 h-11 rounded-[10px] border border-[#2a2a2e] px-4 text-[13px] transition hover:border-[#C9A84C]"
-        >
-          Upload MP4 / MOV
-        </button>
-        <div className="mt-3 space-y-2">
-          {form.videos.map((video, i) => {
-            const selected = selectedVideo === i;
-            const isCover = videoCover && i === 0;
-            return (
-              <div
-                key={`${video.src}-${i}`}
-                draggable
-                onDragStart={() => setDragVideoIndex(i)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => {
-                  if (dragVideoIndex === null) return;
-                  setForm((prev) => ({
-                    ...prev,
-                    coverType: "video",
-                    videos: reorder(prev.videos, dragVideoIndex, i),
-                  }));
-                  setSelectedVideo(i);
-                  setDragVideoIndex(null);
-                }}
-                onClick={() => {
-                  setSelectedVideo(i);
-                  setForm((prev) => ({ ...prev, coverType: "video" }));
-                }}
-                className="flex cursor-grab items-center gap-2 rounded-[10px] p-2 transition hover:bg-white/5 active:cursor-grabbing"
-                style={{
-                  border: selected || isCover ? "1px solid #C9A84C" : "1px solid rgba(255,255,255,0.06)",
-                  background: selected ? "#C9A84C14" : "transparent",
-                }}
-              >
-                {video.type === "file" ? (
-                  <video src={video.src} className="pointer-events-none h-10 w-10 rounded object-cover" muted />
-                ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded bg-[#1a2744] text-[10px] text-[#60a5fa]">
-                    URL
-                  </div>
-                )}
-                <span
-                  className="rounded px-2 py-1 text-[11px] font-semibold"
-                  style={
-                    video.type === "file"
-                      ? { background: "#1a3a2a", color: "#4ade80" }
-                      : { background: "#1a2744", color: "#60a5fa" }
-                  }
-                >
-                  {video.type === "file" ? "MP4" : "URL"}
-                </span>
-                {isCover && (
-                  <span className="shrink-0 rounded-[3px] bg-[#C9A84C] px-2.5 py-1 text-[11px] font-black leading-none tracking-[0.12em] text-black">
-                    CAPA
-                  </span>
-                )}
-                <span className="min-w-0 flex-1 truncate text-[12px] text-[#999]">
-                  {video.name ?? video.src}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setForm((prev) => {
-                      const videos = prev.videos.filter((_, idx) => idx !== i);
-                      return {
-                        ...prev,
-                        videos,
-                        coverType: videos.length === 0 ? "image" : prev.coverType,
-                      };
-                    });
-                    setSelectedVideo(null);
-                  }}
-                  className="flex h-11 w-11 items-center justify-center text-[#ef4444] hover:bg-white/5"
-                >
-                  ✕
-                </button>
-              </div>
-            );
-          })}
-        </div>
+        {linkPreview && (
+          <div className="mt-2 flex items-center gap-3 rounded-[10px] border border-[#1E3A2E] bg-[#0A1F18] p-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={linkPreview}
+              alt=""
+              className="h-14 w-24 rounded object-cover"
+            />
+            <div className="min-w-0 flex-1 text-[12px] text-[#A8B5AE]">
+              Miniatura pronta. Clique em + ou Salvar — o Shorts entra na galeria.
+            </div>
+          </div>
+        )}
       </div>
 
       {mediaTip && (
@@ -686,6 +775,88 @@ export function ProductForm({
           <span className="text-[12px] text-[#6B7A72]">Nome e categoria são obrigatórios.</span>
         )}
       </div>
+    </div>
+  );
+}
+
+function StockGrid({
+  colors,
+  sizes,
+  stock,
+  colorLabel,
+  legacyQty,
+  onChange,
+}: {
+  colors: string[];
+  sizes: string[];
+  stock: StockLine[];
+  colorLabel: (hex: string) => string;
+  legacyQty: number | null;
+  onChange: (color: string, size: string, qty: number) => void;
+}) {
+  const colorAxis = colors.length > 0 ? colors : [""];
+  const sizeAxis = sizes.length > 0 ? sizes : [""];
+  const total = stockTotal(stock);
+
+  return (
+    <div className="mt-4 rounded-[12px] border border-[#1E3A2E] bg-[#0A1F18] p-3">
+      <div className="field-label mb-1">Unidades por tamanho e cor</div>
+      <p className="mb-3 text-[11px] leading-relaxed text-[#6B7A72]">
+        Cada casa é uma combinação. Quando chegar a 0, ela sai do catálogo. Se todas chegarem a 0, a peça sai até você acrescentar.
+      </p>
+      {legacyQty != null && legacyQty > 0 && (
+        <p className="mb-3 text-[11px] text-[#C9A84C]">
+          Estoque geral atual: {legacyQty} peças, ainda sem divisão. Preencha a grade e salve para passar a controlar.
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full border-separate border-spacing-y-2 text-left">
+          <thead>
+            <tr>
+              <th className="pr-2 text-[11px] font-medium text-[#6B7A72]">{colors.length > 0 ? "Cor" : ""}</th>
+              {sizeAxis.map((size) => (
+                <th key={size || "unico"} className="px-1 text-[11px] font-medium text-[#A8B5AE]">
+                  {size || "Qtd"}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {colorAxis.map((color) => (
+              <tr key={color || "sem-cor"}>
+                <td className="pr-2 text-[12px] text-[#A8B5AE]">
+                  {color ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-4 w-4 rounded-full border border-white/20" style={{ background: color }} />
+                      {colorLabel(color)}
+                    </span>
+                  ) : (
+                    "Peças"
+                  )}
+                </td>
+                {sizeAxis.map((size) => {
+                  const line = stock.find(
+                    (entry) => entry.color.toLowerCase() === color.toLowerCase() && entry.size === size,
+                  );
+                  return (
+                    <td key={`${color}-${size}`} className="px-1">
+                      <input
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        className="field-input h-10 w-16 py-2 text-center text-[13px]"
+                        value={line?.qty ?? 0}
+                        onChange={(e) => onChange(color, size, Number(e.target.value))}
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-[12px] text-[#A8B5AE]">Total: {total} peças</p>
     </div>
   );
 }

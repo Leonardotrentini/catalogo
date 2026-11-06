@@ -3,16 +3,26 @@ export interface VideoItem {
   src: string;
   name?: string;
   color?: string;
+  /** Position in the product gallery (photos + videos together). */
+  order?: number;
 }
 
 export interface ProductImage {
   src: string;
   color?: string;
+  /** Position in the product gallery (photos + videos together). */
+  order?: number;
 }
 
 export interface VolumeDiscount {
   minQty: number;
   unitPrice: string;
+}
+
+export interface StockLine {
+  color: string;
+  size: string;
+  qty: number;
 }
 
 export interface Product {
@@ -23,6 +33,8 @@ export interface Product {
   sizes: string[];
   price: string;
   colors: string[];
+  /** Ausente = estoque antigo (só o total). Preenchido = unidades por cor e tamanho. */
+  stock?: StockLine[];
   images: ProductImage[];
   videos: VideoItem[];
   description: string;
@@ -43,11 +55,15 @@ export interface BrandSeller {
   phone: string;
 }
 
+export type BrandVideoPosition = "top" | "after-highlights" | "after-categories" | "before-footer";
+
 export interface Brand {
   name: string;
   logo: string;
   banner: string;
   videoUrl: string;
+  /** Título opcional acima do vídeo de apresentação. Vazio oculta. Ausente usa o texto padrão. */
+  videoTitle?: string;
   whatsapp: string;
   sellers?: BrandSeller[];
   instagram: string;
@@ -56,6 +72,12 @@ export interface Brand {
   highlightStyle?: HighlightStyle;
   checkoutButtonText?: string;
   checkoutButtonColor?: string;
+  /** Where the presentation video sits on the catalog home. */
+  videoPosition?: BrandVideoPosition;
+  /** Liga o estoque por cor e tamanho. Ausente ou falso mantém o estoque único. */
+  stockControl?: boolean;
+  /** Pastas do catálogo (podem existir vazias). Produtos usam product.category. */
+  categories?: string[];
   customProductColors?: ProductColorEntry[];
 }
 
@@ -97,7 +119,37 @@ export interface CartItem {
   image: string;
 }
 
-export type AdminTab = "marca" | "produtos" | "preview";
+export interface Influencer {
+  id: string;
+  catalogId: string;
+  name: string;
+  phone: string;
+  couponCode: string;
+  discountPercent: number;
+  active: boolean;
+  notes: string;
+  createdAt?: string;
+  updatedAt?: string;
+  salesCount?: number;
+  salesTotal?: number;
+}
+
+export interface CouponSale {
+  id: string;
+  catalogId: string;
+  influencerId: string | null;
+  couponCode: string;
+  customerName: string;
+  customerPhone: string;
+  pieces: number;
+  total: number;
+  registeredTotal: number;
+  couponDiscount: number;
+  source: string;
+  createdAt: string;
+}
+
+export type AdminTab = "marca" | "produtos" | "preview" | "integracoes" | "cupons";
 
 export type UserRole = "super_admin" | "tenant";
 

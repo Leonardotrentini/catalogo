@@ -2,6 +2,9 @@ import { DEFAULT_BRAND, DEFAULT_COLORS } from "@/lib/constants";
 import { normalizeHighlightStyle, normalizeHighlights } from "@/lib/highlights";
 import { normalizeVolumeDiscounts } from "@/lib/pricing";
 import { normalizeBrandSellers, normalizeSellers, primaryWhatsAppDigits } from "@/lib/sellers";
+import { normalizeCategories } from "@/lib/categories";
+import { normalizeStock } from "@/lib/stock";
+import { normalizeVideoPosition } from "@/lib/youtube";
 import type { Brand, BrandColors, Product, ProductImage, VideoItem } from "@/lib/types";
 import { createSupabaseAdminClient } from "./admin";
 import { createSupabasePublicServerClient } from "./public-server";
@@ -19,6 +22,10 @@ function normalizeBrand(raw: Partial<Brand> | null | undefined): Brand {
     highlightStyle: normalizeHighlightStyle(merged.highlightStyle),
     checkoutButtonText: merged.checkoutButtonText?.trim() || DEFAULT_BRAND.checkoutButtonText,
     checkoutButtonColor: merged.checkoutButtonColor?.trim() || DEFAULT_BRAND.checkoutButtonColor,
+    videoPosition: normalizeVideoPosition(merged.videoPosition),
+    videoTitle: typeof merged.videoTitle === "string" ? merged.videoTitle : undefined,
+    stockControl: merged.stockControl === true,
+    categories: normalizeCategories(merged.categories),
   };
 }
 
@@ -36,6 +43,7 @@ type ProductRow = {
   name: string;
   category: string;
   qty: number;
+  stock?: unknown;
   sizes: string[] | null;
   price: string;
   colors: string[] | null;
@@ -53,6 +61,7 @@ function mapProduct(row: ProductRow): Product {
     name: row.name ?? "",
     category: row.category ?? "",
     qty: row.qty ?? 0,
+    stock: normalizeStock(row.stock),
     sizes: row.sizes ?? [],
     price: row.price ?? "",
     colors: row.colors ?? [],

@@ -35,8 +35,24 @@ import {
   unitPriceForQty,
   hasVolumePricing,
 } from "@/lib/pricing";
-import { getYoutubeEmbedUrl } from "@/lib/youtube";
+import { buildPresentationEmbed, buildYoutubePlayerSrc, getYoutubeEmbedUrl, getYoutubeId, getYoutubePosterUrl, getYoutubeThumbnailUrl, isYoutubeShort, normalizeVideoPosition, presentationVideoTitle } from "@/lib/youtube";
 import { normalizeSellers, primaryWhatsAppDigits } from "@/lib/sellers";
+import { readStoredCart, writeStoredCart } from "@/lib/cartStorage";
+import { availableColors, availableSizes, isListedInCatalog, lineQty, usesStockMatrix } from "@/lib/stock";
+import { buildWhatsAppOrderMessage, whatsAppOrderFits, whatsAppOrderUrl } from "@/lib/whatsappOrder";
+
+/** Cores derivadas da paleta da marca (home, produto e carrinho). */
+function catalogTheme(colors: BrandColors) {
+  return {
+    muted: withAlpha(colors.text, 0.55),
+    soft: withAlpha(colors.text, 0.72),
+    faint: withAlpha(colors.text, 0.4),
+    border: withAlpha(colors.text, 0.14),
+    borderAccent: withAlpha(colors.accent, 0.28),
+    handle: withAlpha(colors.text, 0.28),
+    controlBorder: withAlpha(colors.text, 0.22),
+  } as const;
+}
 
 export function CatalogPreview({
   brand,
@@ -44,6 +60,7 @@ export function CatalogPreview({
   setColors,
   products,
   publicMode = false,
+  catalogSlug,
   customProductColors,
 }: {
   brand: Brand;
@@ -51,8 +68,17 @@ export function CatalogPreview({
   setColors?: Dispatch<SetStateAction<BrandColors>>;
   products: Product[];
   publicMode?: boolean;
+  catalogSlug?: string;
   customProductColors?: ProductColorEntry[];
 }) {
+  const [liveProducts, setLiveProducts] = useState(products);
+  useEffect(() => {
+    setLiveProducts(products);
+  }, [products]);
+  const shelfProducts =
+    publicMode && brand.stockControl === true
+      ? liveProducts.filter(isListedInCatalog)
+      : liveProducts;
   const palette = customProductColors ?? brand.customProductColors ?? [];
   const colorLabel = (hex: string) => colorNameFromHex(hex, palette);
   const [localColors, setLocalColors] = useState(colorsProp);
@@ -62,10 +88,23 @@ export function CatalogPreview({
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const persistCart = publicMode && Boolean(catalogSlug);
+  const [cartReady, setCartReady] = useState(!persistCart);
   const [cartBump, setCartBump] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [pressedId, setPressedId] = useState<number | null>(null);
   const [openCartAfterProductClose, setOpenCartAfterProductClose] = useState(false);
+
+  useEffect(() => {
+    if (!persistCart || !catalogSlug) return;
+    setCart(readStoredCart(catalogSlug));
+    setCartReady(true);
+  }, [persistCart, catalogSlug]);
+
+  useEffect(() => {
+    if (!cartReady || !persistCart || !catalogSlug) return;
+    writeStoredCart(catalogSlug, cart);
+  }, [cart, cartReady, persistCart, catalogSlug]);
 
   useEffect(() => {
     if (!publicMode) return;
@@ -88,11 +127,101 @@ export function CatalogPreview({
     setOpenCartAfterProductClose(false);
   }, [activeProduct, openCartAfterProductClose]);
 
+  useEffect(() => {
+    if (!publicMode) return;
+
+    const state = window.history.state ?? {};
+    if (cartOpen) {
+      if (state.vestoView !== "cart") window.history.pushState({ vestoView: "cart" }, "");
+      return;
+    }
+    if (activeProduct) {
+      if (state.vestoView !== "product" || state.productId !== activeProduct.id) {
+        window.history.pushState(
+          { vestoView: "product", category: activeCategory, productId: activeProduct.id },
+          "",
+        );
+      }
+      return;
+    }
+    if (activeCategory && (state.vestoView !== "category" || state.category !== activeCategory)) {
+      window.history.pushState({ vestoView: "category", category: activeCategory }, "");
+    }
+  }, [publicMode, cartOpen, activeProduct, activeCategory]);
+
+  useEffect(() => {
+    if (!publicMode) return;
+
+    function onPopState() {
+      const state = window.history.state ?? {};
+      if (state.vestoView === "cart") {
+        setCartOpen(true);
+        return;
+      }
+      setCartOpen(false);
+      if (state.vestoView === "product") {
+        const product = liveProducts.find((item) => item.id === state.productId) ?? null;
+        setActiveCategory(state.category ?? product?.category ?? null);
+        setActiveProduct(product);
+        return;
+      }
+      setActiveProduct(null);
+      setActiveCategory(state.vestoView === "category" ? (state.category ?? null) : null);
+    }
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [publicMode, liveProducts]);
+
+  function closeCart() {
+    if (publicMode && window.history.state?.vestoView === "cart") {
+      window.history.back();
+      return;
+    }
+    setCartOpen(false);
+  }
+
+  function closeCategory() {
+    if (publicMode && window.history.state?.vestoView === "category") {
+      window.history.back();
+      return;
+    }
+    setActiveCategory(null);
+  }
+
+  function closeProduct() {
+    if (publicMode && window.history.state?.vestoView === "product") {
+      window.history.back();
+      return;
+    }
+    setActiveProduct(null);
+  }
+
+  function goHome() {
+    if (!publicMode) {
+      setActiveProduct(null);
+      setActiveCategory(null);
+      return;
+    }
+    const state = window.history.state ?? {};
+    if (state.vestoView === "product") {
+      window.history.go(state.category ? -2 : -1);
+      return;
+    }
+    if (state.vestoView === "category") {
+      window.history.back();
+      return;
+    }
+    setActiveProduct(null);
+    setActiveCategory(null);
+  }
+
   const storeName = brand.name.trim() || "Sua loja";
   const categories = useMemo(() => {
-    const names = [...new Set(products.map((p) => p.category).filter(Boolean))];
-    return names.map((name) => {
-      const items = products.filter((p) => p.category === name);
+    const names = [...new Set(shelfProducts.map((p) => p.category).filter(Boolean))];
+    return names
+      .map((name) => {
+      const items = shelfProducts.filter((p) => p.category === name);
       const withThumb = items.find((p) => productThumbSrc(p)) ?? items.find((p) => p.videos.length > 0);
       return {
         name,
@@ -101,23 +230,31 @@ export function CatalogPreview({
         coverVideo: withThumb ? productThumbIsVideo(withThumb) : false,
         coverPoster: withThumb ? productThumbPoster(withThumb) : "",
       };
-    });
-  }, [products]);
+    })
+      .filter((category) => category.count > 0);
+  }, [shelfProducts]);
 
   const categoryProducts = activeCategory
-    ? products.filter((p) => p.category === activeCategory)
+    ? shelfProducts.filter((p) => p.category === activeCategory)
     : [];
 
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
   function addToCart(item: Omit<CartItem, "key">, options?: { silent?: boolean }) {
     const key = `${item.productId}-${item.color}-${item.size}`;
+    const product = liveProducts.find((entry) => entry.id === item.productId);
+    const max =
+      brand.stockControl === true && product && usesStockMatrix(product)
+        ? lineQty(product, item.color, item.size)
+        : 9999;
     setCart((prev) => {
       const found = prev.find((c) => c.key === key);
+      const nextQty = Math.min(max, (found?.qty ?? 0) + item.qty);
+      if (nextQty <= 0) return prev;
       if (found) {
-        return prev.map((c) => (c.key === key ? { ...c, qty: c.qty + item.qty } : c));
+        return prev.map((c) => (c.key === key ? { ...c, qty: nextQty } : c));
       }
-      return [...prev, { ...item, key }];
+      return [...prev, { ...item, key, qty: nextQty }];
     });
     setCartBump(true);
     setTimeout(() => setCartBump(false), 450);
@@ -164,7 +301,7 @@ export function CatalogPreview({
               <button
                 type="button"
                 className="flex min-h-11 items-center gap-1 text-left"
-                onClick={() => setActiveCategory(null)}
+                onClick={closeCategory}
                 style={{ color: colors.text }}
               >
                 <span className="text-[18px]">‹</span>
@@ -315,21 +452,19 @@ export function CatalogPreview({
         {activeProduct && (
           <ProductSheet
             product={activeProduct}
+            stockControl={brand.stockControl === true}
             colors={colors}
             cart={cart}
             publicMode={publicMode}
             colorLabel={colorLabel}
-            onClose={() => setActiveProduct(null)}
+            onClose={closeProduct}
             onAdd={(item, options) => addToCart(item, options)}
             onOpenCart={() => {
               setActiveProduct(null);
               setActiveCategory(null);
               setOpenCartAfterProductClose(true);
             }}
-            onGoHome={() => {
-              setActiveProduct(null);
-              setActiveCategory(null);
-            }}
+            onGoHome={goHome}
           />
         )}
 
@@ -338,12 +473,89 @@ export function CatalogPreview({
             brand={brand}
             colors={colors}
             cart={cart}
-            products={products}
+            products={liveProducts}
             publicMode={publicMode}
+            catalogSlug={catalogSlug}
             setCart={setCart}
-            onClose={() => setCartOpen(false)}
+            onStockApplied={(updates) => {
+              setLiveProducts((prev) =>
+                prev.map((product) => {
+                  const next = updates.find((item) => item.id === product.id);
+                  return next ? { ...product, stock: next.stock, qty: next.qty } : product;
+                }),
+              );
+            }}
+            onClose={closeCart}
           />
         )}
+      </div>
+    </div>
+  );
+}
+
+function HomePresentationVideo({ brand, colors }: { brand: Brand; colors: BrandColors }) {
+  const [ready, setReady] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const poster = getYoutubePosterUrl(brand.videoUrl);
+  const player = buildPresentationEmbed(brand.videoUrl);
+  const vertical = isYoutubeShort(brand.videoUrl);
+  const title = presentationVideoTitle(brand.videoTitle);
+
+  useEffect(() => {
+    if (!player || ready || attempt >= 2) return;
+    const timer = window.setTimeout(() => setAttempt((current) => current + 1), 8000);
+    return () => window.clearTimeout(timer);
+  }, [player, ready, attempt]);
+
+  if (!player) return null;
+
+  return (
+    <div className="px-4 pb-5 pt-5">
+      {title ? (
+        <h2
+          className="mb-3 text-center text-[15px] font-semibold leading-snug"
+          style={{ color: colors.accent }}
+        >
+          {title}
+        </h2>
+      ) : null}
+      <div className={`mx-auto ${vertical ? "w-[min(86vw,340px)]" : "w-full"}`}>
+        <div
+          className="rounded-[28px] p-[3px] shadow-[0_18px_40px_rgba(0,0,0,0.35)]"
+          style={{
+            background: `linear-gradient(180deg, ${colors.accent}, ${withAlpha(colors.accent, 0.25)})`,
+          }}
+        >
+          <div
+            className="relative overflow-hidden rounded-[25px]"
+            style={{
+              aspectRatio: vertical ? "9 / 16" : "16 / 9",
+              background: colors.card,
+            }}
+          >
+            {poster && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={poster}
+                alt=""
+                fetchPriority="high"
+                decoding="sync"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                style={{ opacity: ready ? 0 : 1 }}
+              />
+            )}
+            <iframe
+              key={`${player}-${attempt}`}
+              src={player}
+              title={title || "Vídeo de apresentação"}
+              className="absolute inset-0 h-full w-full border-0"
+              style={{ opacity: ready ? 1 : 0 }}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              onLoad={() => setReady(true)}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -389,7 +601,9 @@ function HomeView({
   onOpenCategory: (name: string) => void;
   onOpenCart: () => void;
 }) {
-  const embed = getYoutubeEmbedUrl(brand.videoUrl);
+  const embed = getYoutubeId(brand.videoUrl);
+  const videoPosition = normalizeVideoPosition(brand.videoPosition);
+  const video = embed ? <HomePresentationVideo brand={brand} colors={colors} /> : null;
   const ig = brand.instagram.replace(/^@/, "").trim();
   const instagramHref = ig.includes("instagram.com")
     ? ig.startsWith("http")
@@ -422,11 +636,15 @@ function HomeView({
         )}
       </div>
 
+      {videoPosition === "top" && video}
+
       <HighlightStrip
         items={brand.highlights ?? defaultHighlights()}
         style={brand.highlightStyle ?? "pill"}
         colors={colors}
       />
+
+      {videoPosition === "after-highlights" && video}
 
       <div className={`grid gap-2.5 px-4 ${categories.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
         {categories.map((cat) => (
@@ -484,26 +702,7 @@ function HomeView({
         ))}
       </div>
 
-      {embed && (
-        <div className="px-4 pt-6">
-          <div
-            className="mb-2 text-[12px] uppercase tracking-[0.08em]"
-            style={{ color: withAlpha(colors.text, 0.55) }}
-          >
-            Padrão de qualidade
-          </div>
-          <div className="relative overflow-hidden rounded-[14px] bg-black" style={{ height: 180 }}>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full" style={{ background: colors.accent }}>
-                <div
-                  className="ml-1 h-0 w-0 border-y-[8px] border-l-[14px] border-y-transparent"
-                  style={{ borderLeftColor: colors.primary }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {videoPosition === "after-categories" && video}
 
       <div className="px-4 pt-5">
         <button
@@ -515,6 +714,8 @@ function HomeView({
           {brand.checkoutButtonText?.trim() || "Finalizar pedido"}
         </button>
       </div>
+
+      {videoPosition === "before-footer" && video}
 
       <footer className="mt-6 space-y-2 px-4">
         {brand.instagram && (
@@ -563,6 +764,7 @@ function ProductSheet({
   colors,
   cart,
   publicMode,
+  stockControl = false,
   colorLabel,
   onClose,
   onAdd,
@@ -573,6 +775,7 @@ function ProductSheet({
   colors: BrandColors;
   cart: CartItem[];
   publicMode: boolean;
+  stockControl?: boolean;
   colorLabel: (hex: string) => string;
   onClose: () => void;
   onAdd: (item: Omit<CartItem, "key">, options?: { silent?: boolean }) => void;
@@ -581,7 +784,9 @@ function ProductSheet({
 }) {
   const [index, setIndex] = useState(0);
   const [color, setColor] = useState("");
-  const [size, setSize] = useState(product.sizes[0] ?? "");
+  const [size, setSize] = useState(() =>
+    (stockControl ? availableSizes(product)[0] : product.sizes[0]) ?? "",
+  );
   const [pickQty, setPickQty] = useState(1);
   const [pending, setPending] = useState<
     { id: string; color: string; colorName: string; size: string; qty: number }[]
@@ -591,10 +796,50 @@ function ProductSheet({
   const [addedPieces, setAddedPieces] = useState(0);
 
   const gallery = useMemo(() => buildGallery(product), [product]);
+  const listedColors = stockControl ? availableColors(product) : product.colors;
+  const listedSizes = stockControl ? availableSizes(product, color || undefined) : product.sizes;
+  const matrix = stockControl && usesStockMatrix(product);
+
+  useEffect(() => {
+    if (size && listedSizes.includes(size)) return;
+    setSize(listedSizes[0] ?? "");
+  }, [listedSizes, size]);
 
   const current = gallery[index] ?? gallery[0];
+
+  // Prefetch neighbors so arrow navigation feels instant.
+  useEffect(() => {
+    if (gallery.length < 2) return;
+    const neighbors = [
+      gallery[(index + 1) % gallery.length],
+      gallery[(index - 1 + gallery.length) % gallery.length],
+    ];
+    for (const item of neighbors) {
+      if (item?.kind !== "image" || !item.src) continue;
+      const img = new Image();
+      img.decoding = "async";
+      img.src = item.src;
+    }
+  }, [gallery, index]);
   const cartPieces = cartTotalPieces(cart);
   const pendingPieces = pending.reduce((sum, item) => sum + item.qty, 0);
+
+  function reservedQty(colorValue: string, sizeValue: string) {
+    const inPending = pending
+      .filter((item) => item.color === colorValue && item.size === sizeValue)
+      .reduce((sum, item) => sum + item.qty, 0);
+    const inCart = cart
+      .filter((item) => item.productId === product.id && item.color === colorValue && item.size === sizeValue)
+      .reduce((sum, item) => sum + item.qty, 0);
+    return inPending + inCart;
+  }
+
+  function remainingQty(colorValue: string, sizeValue: string) {
+    if (!matrix) return 9999;
+    return Math.max(0, lineQty(product, colorValue, sizeValue) - reservedQty(colorValue, sizeValue));
+  }
+
+  const selectionLeft = remainingQty(color, size);
   const tierQty = cartPieces + pendingPieces + pickQty;
   const pricingQty = cartPieces + pendingPieces;
   const displayUnitPrice = unitPriceForQty(product, tierQty);
@@ -615,7 +860,10 @@ function ProductSheet({
 
   function addToPendingList() {
     const colorValue = color || "";
-    const sizeValue = size || "—";
+    const sizeValue = size || "";
+    const room = remainingQty(colorValue, sizeValue);
+    if (matrix && room <= 0) return;
+    const adding = matrix ? Math.min(pickQty, room) : pickQty;
     const colorName = colorValue ? colorLabel(colorValue) : "—";
     const key = pendingKey(colorValue, sizeValue);
 
@@ -624,7 +872,7 @@ function ProductSheet({
       if (existing) {
         return prev.map((item) =>
           pendingKey(item.color, item.size) === key
-            ? { ...item, qty: item.qty + pickQty }
+            ? { ...item, qty: item.qty + adding }
             : item,
         );
       }
@@ -635,7 +883,7 @@ function ProductSheet({
           color: colorValue,
           colorName,
           size: sizeValue,
-          qty: pickQty,
+          qty: adding,
         },
       ];
     });
@@ -645,9 +893,20 @@ function ProductSheet({
   function updatePendingQty(id: string, delta: number) {
     setPending((prev) =>
       prev
-        .map((item) =>
-          item.id === id ? { ...item, qty: Math.max(1, item.qty + delta) } : item,
-        )
+        .map((item) => {
+          if (item.id !== id) return item;
+          const others = prev
+            .filter((entry) => entry.id !== id && entry.color === item.color && entry.size === item.size)
+            .reduce((sum, entry) => sum + entry.qty, 0);
+          const inCart = cart
+            .filter(
+              (entry) =>
+                entry.productId === product.id && entry.color === item.color && entry.size === item.size,
+            )
+            .reduce((sum, entry) => sum + entry.qty, 0);
+          const cap = matrix ? Math.max(1, lineQty(product, item.color, item.size) - others - inCart) : 9999;
+          return { ...item, qty: Math.max(1, Math.min(cap, item.qty + delta)) };
+        })
         .filter((item) => item.qty > 0),
     );
   }
@@ -690,12 +949,16 @@ function ProductSheet({
   }
 
   const yt = current?.kind === "video" ? getYoutubeEmbedUrl(current.src) : null;
+  const ytThumb = current?.kind === "video" ? getYoutubeThumbnailUrl(current.src) : null;
+  const ytPlayerSrc =
+    current?.kind === "video" ? buildYoutubePlayerSrc(current.src, { autoplay: true, muted: true }) : null;
   const isFileVideo =
     current?.kind === "video" &&
     (current.videoType === "file" || current.src.startsWith("data:") || current.src.startsWith("blob:"));
 
   const canInclude =
     (product.colors.length === 0 || color) && (product.sizes.length === 0 || size);
+  const theme = catalogTheme(colors);
   const overlayClass = publicMode ? "fixed inset-0 z-40" : "absolute inset-0 z-40";
   const sheetClass = publicMode
     ? "sheet-up absolute bottom-0 left-0 right-0 mx-auto w-full max-w-[480px] overflow-y-auto"
@@ -713,14 +976,14 @@ function ProductSheet({
       <div
         className={sheetClass}
         style={{
-          background: "#111113",
+          background: colors.primary,
           borderRadius: "20px 20px 0 0",
           maxHeight: "92vh",
           paddingBottom: "env(safe-area-inset-bottom)",
           color: colors.text,
         }}
       >
-        <div className="mx-auto mt-[10px] h-1 w-9 rounded-[2px] bg-[#333]" />
+        <div className="mx-auto mt-[10px] h-1 w-9 rounded-[2px]" style={{ background: theme.handle }} />
         <div className="relative mt-3 h-[320px] bg-black">
           {current?.kind === "video" && isFileVideo ? (
             <video
@@ -729,16 +992,23 @@ function ProductSheet({
               className="h-full w-full object-contain"
               controls
               autoPlay
+              muted
               playsInline
-              preload="auto"
+              preload="metadata"
+            />
+          ) : current?.kind === "video" && ytPlayerSrc ? (
+            <YoutubeFastPlayer
+              key={current.src}
+              src={ytPlayerSrc}
+              poster={ytThumb}
+              title={current.name ?? "Vídeo"}
             />
           ) : current?.kind === "video" && yt ? (
-            <iframe
-              src={`${yt}?autoplay=1`}
+            <YoutubeFastPlayer
+              key={current.src}
+              src={`${yt}?autoplay=1&mute=1&playsinline=1&rel=0`}
+              poster={ytThumb}
               title={current.name ?? "Vídeo"}
-              className="h-full w-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
             />
           ) : current?.kind === "video" ? (
             <video
@@ -747,15 +1017,19 @@ function ProductSheet({
               className="h-full w-full object-contain"
               controls
               autoPlay
+              muted
               playsInline
-              preload="auto"
+              preload="metadata"
             />
           ) : current?.src ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
+              key={current.src}
               src={current.src}
               alt=""
               className="h-full w-full cursor-pointer object-contain"
+              decoding="async"
+              fetchPriority="high"
               onClick={() => gallery.length > 0 && setIndex((index + 1) % gallery.length)}
             />
           ) : (
@@ -822,12 +1096,14 @@ function ProductSheet({
         </div>
 
         <div className="px-4 pb-[calc(env(safe-area-inset-bottom)+32px)] pt-4">
-          <div className="text-[11px] uppercase tracking-[0.06em] text-[#555]">{product.category}</div>
+          <div className="text-[11px] uppercase tracking-[0.06em]" style={{ color: theme.faint }}>
+            {product.category}
+          </div>
           <h2 className="mt-1 text-[20px] font-bold leading-[1.2]">{product.name}</h2>
           <div className="mt-2 text-[24px] font-bold" style={{ color: colors.accent }}>
             {hasTierPrice ? (
               <span className="flex flex-wrap items-baseline gap-2">
-                <span className="text-[16px] font-medium text-[#6B7A72] line-through">
+                <span className="text-[16px] font-medium line-through" style={{ color: theme.muted }}>
                   R$ {formatMoney(product.price)}
                 </span>
                 <span>R$ {formatMoney(displayUnitPrice)}</span>
@@ -837,11 +1113,16 @@ function ProductSheet({
             )}
           </div>
           {volumeTiers.length > 0 && (
-            <div className="mt-2 rounded-[10px] border border-[#1E3A2E] bg-[#0A1F18] px-3 py-2">
+            <div
+              className="mt-2 rounded-[10px] px-3 py-2"
+              style={{ border: `1px solid ${theme.border}`, background: colors.card }}
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-[11px] font-semibold text-[#A8B5AE]">Desconto por quantidade</div>
+                <div className="text-[11px] font-semibold" style={{ color: theme.soft }}>
+                  Desconto por quantidade
+                </div>
                 {cartPieces > 0 && (
-                  <span className="text-[10px] text-[#6B7A72]">
+                  <span className="text-[10px]" style={{ color: theme.muted }}>
                     {cartPieces} no carrinho · total {tierQty} peça(s)
                   </span>
                 )}
@@ -856,9 +1137,9 @@ function ProductSheet({
                         tierQty >= tier.minQty
                           ? withAlpha(colors.accent, 0.2)
                           : withAlpha(colors.text, 0.06),
-                      color: tierQty >= tier.minQty ? colors.accent : "#6B7A72",
+                      color: tierQty >= tier.minQty ? colors.accent : theme.muted,
                       border: `1px solid ${
-                        tierQty >= tier.minQty ? withAlpha(colors.accent, 0.4) : "#1E3A2E"
+                        tierQty >= tier.minQty ? withAlpha(colors.accent, 0.4) : theme.border
                       }`,
                     }}
                   >
@@ -867,7 +1148,7 @@ function ProductSheet({
                 ))}
               </div>
               {hasTierPrice && (
-                <div className="mt-1.5 text-[11px] text-[#6B7A72]">
+                <div className="mt-1.5 text-[11px]" style={{ color: theme.muted }}>
                   De R$ {formatMoney(product.price)} por{" "}
                   <span className="font-semibold" style={{ color: colors.accent }}>
                     R$ {formatMoney(displayUnitPrice)}/un.
@@ -879,11 +1160,23 @@ function ProductSheet({
               )}
             </div>
           )}
-          <div className="mt-1 text-[11px] text-[#555]">Disponível: {product.qty} unidades</div>
+          <div className="mt-1 text-[11px]" style={{ color: theme.faint }}>
+            {matrix
+              ? selectionLeft > 0
+                ? `Disponível nesta seleção: ${selectionLeft}`
+                : "Sem estoque nesta seleção"
+              : product.qty > 0
+                ? `Estoque informado: ${product.qty} unidades`
+                : "Estoque sob consulta"}
+          </div>
           {product.description && (
             <p
-              className="mt-3 text-[14px] leading-[1.6] text-[#888]"
-              style={{ borderLeft: `2px solid ${withAlpha(colors.accent, 0.33)}`, paddingLeft: 12 }}
+              className="mt-3 whitespace-pre-line text-[14px] leading-[1.6]"
+              style={{
+                color: theme.muted,
+                borderLeft: `2px solid ${withAlpha(colors.accent, 0.33)}`,
+                paddingLeft: 12,
+              }}
             >
               {product.description}
             </p>
@@ -893,7 +1186,7 @@ function ProductSheet({
             <div className="mt-5">
               <div className="mb-2 text-[12px]">Cor: {color ? colorLabel(color) : "—"}</div>
               <div className="flex flex-wrap gap-3">
-                {product.colors.map((c) => {
+                {listedColors.map((c) => {
                   const selected = color === c;
                   return (
                     <button
@@ -921,7 +1214,7 @@ function ProductSheet({
             <div className="mt-5">
               <div className="mb-2 text-[12px]">Tamanho</div>
               <div className="flex flex-wrap gap-2">
-                {product.sizes.map((s) => {
+                {listedSizes.map((s) => {
                   const selected = size === s;
                   return (
                     <button
@@ -946,39 +1239,42 @@ function ProductSheet({
             </div>
           )}
 
-          <div className="mt-5 rounded-[12px] border border-[#1E3A2E] bg-[#0A1F18] p-3">
-            <div className="mb-2 text-[12px] font-semibold text-[#A8B5AE]">Quantidade desta seleção</div>
+          <div
+            className="mt-5 rounded-[12px] p-3"
+            style={{ border: `1px solid ${theme.border}`, background: colors.card }}
+          >
+            <div className="mb-2 text-[12px] font-semibold" style={{ color: theme.soft }}>
+              Quantidade desta seleção
+            </div>
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setPickQty((q) => Math.max(1, q - 1))}
-                className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#2a2a2e] text-lg"
+                className="flex h-10 w-10 items-center justify-center rounded-[8px] text-lg"
+                style={{ border: `1px solid ${theme.controlBorder}` }}
               >
                 −
               </button>
               <PickQtyInput
                 value={pickQty}
-                max={product.qty > 0 ? product.qty : undefined}
+                max={matrix ? Math.max(1, selectionLeft) : undefined}
                 onChange={setPickQty}
+                accent={colors.accent}
               />
               <button
                 type="button"
-                onClick={() =>
-                  setPickQty((q) => {
-                    const max = product.qty > 0 ? product.qty : undefined;
-                    const next = q + 1;
-                    return max !== undefined ? Math.min(max, next) : next;
-                  })
-                }
-                className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#2a2a2e] text-lg"
+                onClick={() => setPickQty((q) => Math.min(matrix ? Math.max(1, selectionLeft) : 9999, q + 1))}
+                className="flex h-10 w-10 items-center justify-center rounded-[8px] text-lg"
+                style={{ border: `1px solid ${theme.controlBorder}` }}
               >
                 +
               </button>
               <button
                 type="button"
-                disabled={!canInclude}
+                disabled={!canInclude || (matrix && selectionLeft <= 0)}
                 onClick={addToPendingList}
-                className="ml-auto h-10 rounded-[10px] border border-[#C9A84C] px-4 text-[13px] font-semibold text-[#C9A84C] disabled:opacity-40"
+                className="ml-auto h-10 rounded-[10px] px-4 text-[13px] font-semibold disabled:opacity-40"
+                style={{ border: `1px solid ${colors.accent}`, color: colors.accent }}
               >
                 + Incluir
               </button>
@@ -986,10 +1282,18 @@ function ProductSheet({
           </div>
 
           {pending.length > 0 && (
-            <div className="mt-4 rounded-[12px] border border-[rgba(201,168,76,0.2)] bg-[#0F281F] p-3">
+            <div
+              className="mt-4 rounded-[12px] p-3"
+              style={{
+                border: `1px solid ${theme.borderAccent}`,
+                background: withAlpha(colors.card, 0.92),
+              }}
+            >
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-[12px] font-semibold text-[#C9A84C]">Sua seleção</span>
-                <span className="text-[11px] text-[#6B7A72]">
+                <span className="text-[12px] font-semibold" style={{ color: colors.accent }}>
+                  Sua seleção
+                </span>
+                <span className="text-[11px]" style={{ color: theme.muted }}>
                   {pendingPieces} nova(s) · {pricingQty} no total
                 </span>
               </div>
@@ -997,7 +1301,8 @@ function ProductSheet({
                 {pending.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center gap-2 rounded-[10px] border border-[#1E3A2E] bg-[#0A1F18] px-2 py-2"
+                    className="flex items-center gap-2 rounded-[10px] px-2 py-2"
+                    style={{ border: `1px solid ${theme.border}`, background: colors.primary }}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-medium">
@@ -1006,7 +1311,7 @@ function ProductSheet({
                       <div className="text-[12px]" style={{ color: colors.accent }}>
                         R$ {formatMoney(pendingUnitPrice)}/un.
                         {item.qty > 1 && (
-                          <span className="text-[#6B7A72]">
+                          <span style={{ color: theme.muted }}>
                             {" "}
                             · R$ {formatMoney(pendingUnitPrice * item.qty)}
                           </span>
@@ -1017,7 +1322,8 @@ function ProductSheet({
                       <button
                         type="button"
                         onClick={() => updatePendingQty(item.id, -1)}
-                        className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[#2a2a2e]"
+                        className="flex h-8 w-8 items-center justify-center rounded-[6px]"
+                        style={{ border: `1px solid ${theme.controlBorder}` }}
                       >
                         −
                       </button>
@@ -1025,7 +1331,8 @@ function ProductSheet({
                       <button
                         type="button"
                         onClick={() => updatePendingQty(item.id, 1)}
-                        className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[#2a2a2e]"
+                        className="flex h-8 w-8 items-center justify-center rounded-[6px]"
+                        style={{ border: `1px solid ${theme.controlBorder}` }}
                       >
                         +
                       </button>
@@ -1041,8 +1348,11 @@ function ProductSheet({
                   </div>
                 ))}
               </div>
-              <div className="mt-3 flex items-center justify-between border-t border-[#1E3A2E] pt-2 text-[13px]">
-                <span className="text-[#6B7A72]">
+              <div
+                className="mt-3 flex items-center justify-between pt-2 text-[13px]"
+                style={{ borderTop: `1px solid ${theme.border}` }}
+              >
+                <span style={{ color: theme.muted }}>
                   Subtotal{hasTierPrice ? ` · R$ ${formatMoney(pendingUnitPrice)}/un.` : ""}
                 </span>
                 <span className="font-bold" style={{ color: colors.accent }}>
@@ -1078,22 +1388,27 @@ function ProductSheet({
             aria-label="Fechar confirmação"
           />
           <div
-            className="relative w-full max-w-[360px] rounded-[16px] border border-[rgba(201,168,76,0.2)] bg-[#111113] p-4"
-            style={{ color: colors.text }}
+            className="relative w-full max-w-[360px] rounded-[16px] p-4"
+            style={{
+              color: colors.text,
+              background: colors.primary,
+              border: `1px solid ${theme.borderAccent}`,
+            }}
           >
             <h3 className="text-[16px] font-bold">Confirmar itens</h3>
-            <p className="mt-1 text-[12px] text-[#6B7A72]">
+            <p className="mt-1 text-[12px]" style={{ color: theme.muted }}>
               Revise sua seleção antes de adicionar ao carrinho.
             </p>
             <div className="mt-4 max-h-48 space-y-2 overflow-y-auto">
               {pending.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between gap-2 rounded-[10px] bg-[#0A1F18] px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-[10px] px-3 py-2"
+                  style={{ background: colors.card }}
                 >
                   <div className="min-w-0">
                     <div className="truncate text-[13px] font-medium">{product.name}</div>
-                    <div className="text-[11px] text-[#6B7A72]">
+                    <div className="text-[11px]" style={{ color: theme.muted }}>
                       {item.colorName} · Tam {item.size} · {item.qty} un.
                     </div>
                   </div>
@@ -1103,8 +1418,11 @@ function ProductSheet({
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex items-center justify-between border-t border-[#1E3A2E] pt-3">
-              <span className="text-[13px] text-[#6B7A72]">
+            <div
+              className="mt-4 flex items-center justify-between pt-3"
+              style={{ borderTop: `1px solid ${theme.border}` }}
+            >
+              <span className="text-[13px]" style={{ color: theme.muted }}>
                 Total ({pendingPieces} novas · {pricingQty} no total
                 {hasTierPrice ? ` · R$ ${formatMoney(pendingUnitPrice)}/un.` : ""})
               </span>
@@ -1116,7 +1434,8 @@ function ProductSheet({
               <button
                 type="button"
                 onClick={() => setConfirmOpen(false)}
-                className="h-11 flex-1 rounded-[10px] border border-[#2a2a2e] text-[13px]"
+                className="h-11 flex-1 rounded-[10px] text-[13px]"
+                style={{ border: `1px solid ${theme.controlBorder}` }}
               >
                 Voltar
               </button>
@@ -1143,8 +1462,12 @@ function ProductSheet({
             aria-label="Fechar"
           />
           <div
-            className="relative w-full max-w-[360px] rounded-[16px] border border-[rgba(201,168,76,0.2)] bg-[#111113] p-4"
-            style={{ color: colors.text }}
+            className="relative w-full max-w-[360px] rounded-[16px] p-4"
+            style={{
+              color: colors.text,
+              background: colors.primary,
+              border: `1px solid ${theme.borderAccent}`,
+            }}
           >
             <div className="flex items-center gap-2">
               <span
@@ -1155,12 +1478,14 @@ function ProductSheet({
               </span>
               <div>
                 <h3 className="text-[16px] font-bold">Adicionado ao carrinho!</h3>
-                <p className="text-[12px] text-[#6B7A72]">
+                <p className="text-[12px]" style={{ color: theme.muted }}>
                   {addedPieces} peça{addedPieces === 1 ? "" : "s"} de {product.name}
                 </p>
               </div>
             </div>
-            <p className="mt-4 text-[13px] text-[#A8B5AE]">O que deseja fazer agora?</p>
+            <p className="mt-4 text-[13px]" style={{ color: theme.soft }}>
+              O que deseja fazer agora?
+            </p>
             <div className="mt-4 flex flex-col gap-2">
               <button
                 type="button"
@@ -1173,7 +1498,8 @@ function ProductSheet({
               <button
                 type="button"
                 onClick={continueShopping}
-                className="flex h-12 w-full items-center justify-center rounded-[12px] border border-[#2a2a2e] text-[14px] font-semibold"
+                className="flex h-12 w-full items-center justify-center rounded-[12px] text-[14px] font-semibold"
+                style={{ border: `1px solid ${theme.controlBorder}` }}
               >
                 Selecionar mais produtos
               </button>
@@ -1191,7 +1517,9 @@ function CartSheet({
   cart,
   products,
   publicMode,
+  catalogSlug,
   setCart,
+  onStockApplied,
   onClose,
 }: {
   brand: Brand;
@@ -1199,7 +1527,9 @@ function CartSheet({
   cart: CartItem[];
   products: Product[];
   publicMode: boolean;
+  catalogSlug?: string;
   setCart: (next: CartItem[]) => void;
+  onStockApplied?: (updates: { id: number; stock: Product["stock"]; qty: number }[]) => void;
   onClose: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -1207,6 +1537,15 @@ function CartSheet({
   const [customerName, setCustomerName] = useState("");
   const [customerCep, setCustomerCep] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [couponInput, setCouponInput] = useState("");
+  const [couponApplying, setCouponApplying] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    influencerName: string;
+    discountPercent: number;
+    discount: number;
+  } | null>(null);
   const sellers = useMemo(() => normalizeSellers(brand), [brand]);
   const [sellerId, setSellerId] = useState("");
 
@@ -1233,9 +1572,12 @@ function CartSheet({
   }, [sellers]);
 
   const pieces = cart.reduce((s, i) => s + i.qty, 0);
-  const total = cartGrandTotal(cart, products);
+  const volumeTotal = cartGrandTotal(cart, products);
   const registeredTotal = cartRegisteredGrandTotal(cart);
-  const totalSavings = cartTotalSavings(cart, products);
+  const volumeSavings = cartTotalSavings(cart, products);
+  const couponDiscount = appliedCoupon?.discount ?? 0;
+  const total = Math.max(0, volumeTotal - couponDiscount);
+  const totalSavings = volumeSavings + couponDiscount;
 
   const groupedBySize = useMemo(() => {
     const map = new Map<string, CartItem[]>();
@@ -1261,22 +1603,104 @@ function CartSheet({
     return `${digits.slice(0, 5)}-${digits.slice(5)}`;
   }
 
-  function productStock(productId: number) {
-    return products.find((p) => p.id === productId)?.qty ?? 99;
-  }
-
   function updateQty(item: CartItem, delta: number) {
-    const max = productStock(item.productId);
+    const product = products.find((entry) => entry.id === item.productId);
+    const max =
+      brand.stockControl === true && product && usesStockMatrix(product)
+        ? lineQty(product, item.color, item.size)
+        : 9999;
     setCart(
       cart
         .map((c) =>
-          c.key === item.key ? { ...c, qty: Math.min(max, Math.max(0, c.qty + delta)) } : c,
+          c.key === item.key
+            ? { ...c, qty: Math.min(max, Math.max(0, c.qty + delta)) }
+            : c,
         )
         .filter((c) => c.qty > 0),
     );
   }
 
-  function sendWhatsApp() {
+  async function applyCoupon() {
+    if (!publicMode || !catalogSlug) {
+      setFormError("Cupom disponível no catálogo publicado.");
+      return;
+    }
+    const code = couponInput.trim();
+    if (!code) {
+      setFormError("Digite o cupom.");
+      return;
+    }
+    setCouponApplying(true);
+    setFormError(null);
+    try {
+      const response = await fetch("/api/catalog/coupon/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: catalogSlug, code, subtotal: volumeTotal }),
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        couponCode?: string;
+        influencerName?: string;
+        discountPercent?: number;
+        discount?: number;
+      };
+      if (!response.ok || !data.couponCode) {
+        setAppliedCoupon(null);
+        setFormError(data.error || "Cupom inválido.");
+        return;
+      }
+      setAppliedCoupon({
+        code: data.couponCode,
+        influencerName: data.influencerName ?? "",
+        discountPercent: Number(data.discountPercent) || 0,
+        discount: Number(data.discount) || 0,
+      });
+    } catch {
+      setFormError("Não foi possível validar o cupom.");
+    } finally {
+      setCouponApplying(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!appliedCoupon || !publicMode || !catalogSlug) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/catalog/coupon/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slug: catalogSlug,
+            code: appliedCoupon.code,
+            subtotal: volumeTotal,
+          }),
+        });
+        const data = (await response.json()) as {
+          couponCode?: string;
+          influencerName?: string;
+          discountPercent?: number;
+          discount?: number;
+        };
+        if (cancelled || !response.ok || !data.couponCode) return;
+        setAppliedCoupon({
+          code: data.couponCode,
+          influencerName: data.influencerName ?? "",
+          discountPercent: Number(data.discountPercent) || 0,
+          discount: Number(data.discount) || 0,
+        });
+      } catch {
+        // keep previous coupon until next send
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [volumeTotal, appliedCoupon?.code, publicMode, catalogSlug]);
+
+  async function sendWhatsApp() {
     setFormError(null);
     const phone = digitsOnly(customerPhone);
     const cep = digitsOnly(customerCep);
@@ -1306,51 +1730,105 @@ function CartSheet({
       return;
     }
 
-    const itemLines = cart.map((item, idx) => {
-      const product = products.find((p) => p.id === item.productId);
-      const registered = cartLineRegisteredTotal(item);
-      const discounted = product
-        ? cartLineDiscountedTotal(item, cart, product)
-        : registered;
-      const savings = product ? cartLineSavings(item, cart, product) : 0;
-      const unit = product
-        ? formatMoney(unitPriceForQty(product, cartTotalPieces(cart)))
-        : formatMoney(item.price);
-      return (
-        `*Item ${idx + 1}*\n` +
-        `Produto: ${item.name}\n` +
-        `Cor: ${item.colorName}\n` +
-        `Tamanho: ${item.size}\n` +
-        `Quantidade: ${item.qty}\n` +
-        `Valor registrado: R$ ${registered.toFixed(2)}\n` +
-        `Com desconto progressivo: R$ ${discounted.toFixed(2)}\n` +
-        (savings > 0 ? `Economia: R$ ${savings.toFixed(2)}\n` : "") +
-        `Valor unit.: R$ ${unit}\n` +
-        `Subtotal: R$ ${discounted.toFixed(2)}`
-      );
+    const msg = buildWhatsAppOrderMessage({
+      brandName: brand.name,
+      customerName: name,
+      customerPhone: phone,
+      cep: formatCep(customerCep),
+      sellerName: seller.name,
+      pieces,
+      registeredTotal: registeredTotal.toFixed(2),
+      savings: totalSavings.toFixed(2),
+      total: total.toFixed(2),
+      cart,
+      couponCode: appliedCoupon?.code,
+      influencerName: appliedCoupon?.influencerName,
+      couponDiscount: couponDiscount > 0 ? couponDiscount.toFixed(2) : undefined,
     });
 
-    const msg =
-      `🛒 *NOVO PEDIDO — ${brand.name || "Catálogo"}*\n\n` +
-      `*Dados do cliente*\n` +
-      `Nome: ${name}\n` +
-      `WhatsApp: +${phone}\n` +
-      `CEP: ${formatCep(customerCep)}\n` +
-      `Vendedor: ${seller.name}\n\n` +
-      `*Itens do pedido*\n\n` +
-      `${itemLines.join("\n\n")}\n\n` +
-      `━━━━━━━━━━━━━━━\n` +
-      `Valor registrado: R$ ${registeredTotal.toFixed(2)}\n` +
-      (totalSavings > 0 ? `Economia total: R$ ${totalSavings.toFixed(2)}\n` : "") +
-      `💰 *Total com desconto: R$ ${total.toFixed(2)}*\n` +
-      `📦 *${pieces} peça${pieces === 1 ? "" : "s"}*\n\n` +
-      `_Pedido enviado pelo catálogo digital_`;
+    const storeDigits = digitsOnly(storePhone);
+    setSending(true);
+    try {
+      if (publicMode && catalogSlug && appliedCoupon) {
+        const redeem = await fetch("/api/catalog/coupon/redeem", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slug: catalogSlug,
+            code: appliedCoupon.code,
+            customerName: name,
+            customerPhone: phone,
+            pieces,
+            registeredTotal,
+            subtotal: volumeTotal,
+          }),
+        });
+        const redeemData = (await redeem.json()) as { error?: string };
+        if (!redeem.ok) {
+          setFormError(redeemData.error || "Não foi possível registrar o cupom.");
+          return;
+        }
+      }
 
-    window.open(`https://wa.me/${storePhone}?text=${encodeURIComponent(msg)}`, "_blank");
+      const tracked = cart.filter((item) => {
+        const product = products.find((entry) => entry.id === item.productId);
+        return brand.stockControl === true && product && usesStockMatrix(product);
+      });
+      if (publicMode && catalogSlug && tracked.length > 0) {
+        const response = await fetch("/api/catalog/stock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slug: catalogSlug,
+            items: tracked.map((item) => ({
+              productId: item.productId,
+              color: item.color,
+              size: item.size,
+              qty: item.qty,
+            })),
+          }),
+        });
+        const data = (await response.json()) as {
+          error?: string;
+          products?: { id: number; stock: Product["stock"]; qty: number }[];
+        };
+        if (!response.ok) {
+          setFormError(data.error || "Não foi possível baixar o estoque.");
+          return;
+        }
+        if (data.products?.length) onStockApplied?.(data.products);
+      }
+
+      setCart([]);
+      setAppliedCoupon(null);
+      setCouponInput("");
+    } catch {
+      setFormError("Não foi possível finalizar o pedido. Tente de novo.");
+      return;
+    } finally {
+      setSending(false);
+    }
+
+    if (whatsAppOrderFits(storeDigits, msg)) {
+      window.open(whatsAppOrderUrl(storeDigits, msg), "_blank");
+      return;
+    }
+
+    const short =
+      `🛒 *NOVO PEDIDO — ${brand.name || "Catálogo"}*\n` +
+      `${name} · ${pieces} peça${pieces === 1 ? "" : "s"} · Total com desconto R$ ${total.toFixed(2)}\n\n` +
+      `O pedido completo foi copiado. Segure esta mensagem e toque em Colar.`;
+    void navigator.clipboard?.writeText(msg).catch(() => undefined);
+    setFormError("Pedido grande: a mensagem completa foi copiada. No WhatsApp, cole no campo de texto.");
+    window.open(whatsAppOrderUrl(storeDigits, short), "_blank");
   }
 
-  const inputClass =
-    "h-12 w-full rounded-[10px] border border-[#2a2a2e] bg-[#0A1F18] px-3 text-[14px] outline-none focus:border-[#25D366]";
+  const theme = catalogTheme(colors);
+  const inputStyle = {
+    border: `1px solid ${theme.controlBorder}`,
+    background: colors.card,
+    color: colors.text,
+  } as const;
   const overlayClass = publicMode ? "fixed inset-0 z-50" : "absolute inset-0 z-40";
   const sheetClass = publicMode
     ? "sheet-up absolute inset-x-0 bottom-0 mx-auto flex h-[100dvh] w-full max-w-[480px] flex-col overflow-hidden sm:h-[92vh] sm:max-h-[92vh] sm:rounded-t-[20px]"
@@ -1373,12 +1851,22 @@ function CartSheet({
           color: colors.text,
         }}
       >
-        <div className="mx-auto mt-[10px] h-1 w-9 rounded-[2px] bg-[#333]" />
+        <div className="mx-auto mt-[10px] h-1 w-9 rounded-[2px]" style={{ background: theme.handle }} />
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-4">
-          <h2 className="pt-2 text-[22px] font-bold" style={{ color: "#25D366" }}>
-            Carrinho
-          </h2>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <h2 className="text-[22px] font-bold" style={{ color: colors.accent }}>
+              Carrinho
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-11 items-center gap-1 rounded-[10px] px-3 text-[14px] font-semibold"
+              style={{ background: colors.card, color: colors.text }}
+            >
+              ‹ Voltar
+            </button>
+          </div>
 
           {cart.length === 0 ? (
             <div className="py-10 text-center">
@@ -1403,14 +1891,17 @@ function CartSheet({
               {groupedBySize.map(([size, items]) => (
                 <div
                   key={size}
-                  className="overflow-hidden rounded-[12px] border border-[#1E3A2E]"
-                  style={{ background: colors.card }}
+                  className="overflow-hidden rounded-[12px]"
+                  style={{ background: colors.card, border: `1px solid ${theme.border}` }}
                 >
-                  <div className="border-b border-[#1E3A2E] px-3 py-2 text-[12px] font-semibold text-[#A8B5AE]">
+                  <div
+                    className="px-3 py-2 text-[12px] font-semibold"
+                    style={{ borderBottom: `1px solid ${theme.border}`, color: theme.soft }}
+                  >
                     Tamanho {size}
                   </div>
-                  <div className="divide-y divide-[#1E3A2E]">
-                    {items.map((item) => {
+                  <div style={{ borderColor: theme.border }}>
+                    {items.map((item, itemIndex) => {
                       const product = products.find((p) => p.id === item.productId);
                       const registeredTotal = cartLineRegisteredTotal(item);
                       const discountedTotal = product
@@ -1421,9 +1912,14 @@ function CartSheet({
                       const discountedUnit = product
                         ? unitPriceForQty(product, cartTotalPieces(cart))
                         : registeredUnit;
-                      const max = productStock(item.productId);
                       return (
-                        <div key={item.key} className="flex gap-3 p-3">
+                        <div
+                          key={item.key}
+                          className="flex gap-3 p-3"
+                          style={
+                            itemIndex > 0 ? { borderTop: `1px solid ${theme.border}` } : undefined
+                          }
+                        >
                           <div
                             className="h-14 w-14 shrink-0 overflow-hidden rounded-[8px]"
                             style={{ background: withAlpha(colors.primary, 0.6) }}
@@ -1440,7 +1936,7 @@ function CartSheet({
                             <div className="mt-1 text-[12px]">
                               {savings > 0 ? (
                                 <span className="flex flex-wrap items-center gap-1.5">
-                                  <span className="text-[#6B7A72] line-through">
+                                  <span className="line-through" style={{ color: theme.muted }}>
                                     R$ {formatMoney(registeredUnit)}/un.
                                   </span>
                                   <span className="font-bold" style={{ color: colors.accent }}>
@@ -1455,20 +1951,20 @@ function CartSheet({
                             </div>
                             <div className="mt-2 space-y-1 text-[11px]">
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-[#6B7A72]">Valor registrado (total)</span>
-                                <span className="font-medium text-[#A8B5AE] line-through">
+                                <span style={{ color: theme.muted }}>Valor registrado (total)</span>
+                                <span className="font-medium line-through" style={{ color: theme.soft }}>
                                   R$ {formatMoney(registeredTotal)}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-[#6B7A72]">Com desconto progressivo</span>
+                                <span style={{ color: theme.muted }}>Com desconto progressivo</span>
                                 <span className="font-bold" style={{ color: colors.accent }}>
                                   R$ {formatMoney(discountedTotal)}
                                 </span>
                               </div>
                               {savings > 0 && (
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[#6B7A72]">Você economiza</span>
+                                  <span style={{ color: theme.muted }}>Você economiza</span>
                                   <span className="font-semibold text-[#25D366]">
                                     R$ {formatMoney(savings)}
                                   </span>
@@ -1478,7 +1974,8 @@ function CartSheet({
                             <div className="mt-2 flex items-center gap-2">
                               <button
                                 type="button"
-                                className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[#2a2a2e] text-[16px]"
+                                className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[16px]"
+                                style={{ border: `1px solid ${theme.controlBorder}` }}
                                 onClick={() => updateQty(item, -1)}
                               >
                                 −
@@ -1486,13 +1983,12 @@ function CartSheet({
                               <span className="min-w-4 text-center text-[14px] font-bold">{item.qty}</span>
                               <button
                                 type="button"
-                                disabled={item.qty >= max}
-                                className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[#2a2a2e] text-[16px] disabled:opacity-40"
+                                className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[16px]"
+                                style={{ border: `1px solid ${theme.controlBorder}` }}
                                 onClick={() => updateQty(item, 1)}
                               >
                                 +
                               </button>
-                              <span className="text-[11px] text-[#6B7A72]">máx. {max}</span>
                               <button
                                 type="button"
                                 className="ml-auto flex h-8 w-8 items-center justify-center text-[#ef4444]"
@@ -1512,40 +2008,125 @@ function CartSheet({
 
               <div
                 className="rounded-[12px] border px-3 py-3"
-                style={{ borderColor: "#25D366", background: withAlpha("#25D366", 0.08) }}
+                style={{ borderColor: colors.accent, background: withAlpha(colors.accent, 0.08) }}
               >
-                <div className="text-[11px] font-bold tracking-[0.08em]" style={{ color: "#25D366" }}>
+                <div className="text-[11px] font-bold tracking-[0.08em]" style={{ color: colors.accent }}>
                   RESUMO DO PEDIDO
                 </div>
                 <div className="mt-2 text-[14px] font-bold">{summaryLabel}</div>
-                <div className="text-[12px] text-[#A8B5AE]">{pieces} peças no total</div>
-                <div className="mt-3 space-y-1.5 border-t border-[#1E3A2E] pt-2 text-[12px]">
+                <div className="text-[12px]" style={{ color: theme.soft }}>
+                  {pieces} peças no total
+                </div>
+                <div
+                  className="mt-3 space-y-1.5 pt-2 text-[12px]"
+                  style={{ borderTop: `1px solid ${theme.border}` }}
+                >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[#6B7A72]">Valor registrado (total)</span>
-                    <span className="font-medium text-[#A8B5AE] line-through">
+                    <span style={{ color: theme.muted }}>Valor registrado (total)</span>
+                    <span className="font-medium line-through" style={{ color: theme.soft }}>
                       R$ {registeredTotal.toFixed(2)}
                     </span>
                   </div>
+                  {volumeSavings > 0 && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span style={{ color: theme.muted }}>Economia por quantidade</span>
+                      <span className="font-semibold text-[#25D366]">
+                        R$ {volumeSavings.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  {couponDiscount > 0 && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span style={{ color: theme.muted }}>
+                        Cupom {appliedCoupon?.code}
+                        {appliedCoupon?.discountPercent
+                          ? ` (${appliedCoupon.discountPercent}%)`
+                          : ""}
+                      </span>
+                      <span className="font-semibold text-[#25D366]">
+                        − R$ {couponDiscount.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
                   {totalSavings > 0 && (
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[#6B7A72]">Economia total</span>
+                      <span style={{ color: theme.muted }}>Economia total</span>
                       <span className="font-semibold text-[#25D366]">
                         R$ {totalSavings.toFixed(2)}
                       </span>
                     </div>
                   )}
                 </div>
-                <div className="mt-2 flex items-end justify-between border-t border-[#1E3A2E] pt-2">
-                  <span className="text-[12px] text-[#A8B5AE]">Valor com desconto progressivo</span>
+                <div
+                  className="mt-2 flex items-end justify-between pt-2"
+                  style={{ borderTop: `1px solid ${theme.border}` }}
+                >
+                  <span className="text-[12px]" style={{ color: theme.soft }}>
+                    Total a pagar
+                  </span>
                   <span className="text-[22px] font-bold" style={{ color: colors.accent }}>
                     R$ {total.toFixed(2)}
                   </span>
                 </div>
               </div>
 
+              {publicMode && catalogSlug && (
+                <div
+                  className="rounded-[12px] p-3"
+                  style={{ border: `1px solid ${theme.border}`, background: colors.card }}
+                >
+                  <div className="text-[12px] font-semibold" style={{ color: theme.soft }}>
+                    Cupom de influenciador
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      className="h-12 w-full rounded-[10px] px-3 text-[14px] uppercase outline-none"
+                      style={inputStyle}
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = colors.accent;
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = theme.controlBorder;
+                      }}
+                      placeholder="Digite o cupom"
+                    />
+                    <button
+                      type="button"
+                      disabled={couponApplying}
+                      onClick={() => void applyCoupon()}
+                      className="h-12 shrink-0 rounded-[10px] px-4 text-[13px] font-semibold disabled:opacity-50"
+                      style={{ border: `1px solid ${colors.accent}`, color: colors.accent }}
+                    >
+                      {couponApplying ? "..." : "Aplicar"}
+                    </button>
+                  </div>
+                  {appliedCoupon && (
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[12px]">
+                      <span className="text-[#25D366]">
+                        Cupom {appliedCoupon.code} aplicado
+                        {appliedCoupon.influencerName ? ` · ${appliedCoupon.influencerName}` : ""}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAppliedCoupon(null);
+                          setCouponInput("");
+                        }}
+                        className="text-[#ef4444]"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {sellers.length > 1 && (
                 <div className="space-y-2">
-                  <span className="block text-[12px] text-[#A8B5AE]">
+                  <span className="block text-[12px]" style={{ color: theme.soft }}>
                     Enviar para <span className="text-[#ef4444]">*</span>
                   </span>
                   <div className="space-y-2">
@@ -1558,7 +2139,7 @@ function CartSheet({
                           onClick={() => setSellerId(seller.id)}
                           className="flex w-full items-center gap-3 rounded-[10px] border px-3 py-3 text-left transition"
                           style={{
-                            borderColor: selected ? colors.accent : "#2a2a2e",
+                            borderColor: selected ? colors.accent : theme.controlBorder,
                             background: selected ? withAlpha(colors.accent, 0.12) : colors.card,
                             boxShadow: selected ? `0 0 0 1px ${withAlpha(colors.accent, 0.35)}` : "none",
                           }}
@@ -1566,7 +2147,7 @@ function CartSheet({
                           <span
                             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2"
                             style={{
-                              borderColor: selected ? colors.accent : "#555",
+                              borderColor: selected ? colors.accent : theme.faint,
                               background: selected ? colors.accent : "transparent",
                             }}
                           >
@@ -1579,7 +2160,9 @@ function CartSheet({
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block text-[14px] font-semibold">{seller.name}</span>
-                            <span className="block text-[12px] text-[#6B7A72]">WhatsApp</span>
+                            <span className="block text-[12px]" style={{ color: theme.muted }}>
+                              WhatsApp
+                            </span>
                           </span>
                         </button>
                       );
@@ -1590,42 +2173,63 @@ function CartSheet({
 
               <div className="space-y-3">
                 <label className="block">
-                  <span className="mb-1.5 block text-[12px] text-[#A8B5AE]">
+                  <span className="mb-1.5 block text-[12px]" style={{ color: theme.soft }}>
                     WhatsApp <span className="text-[#ef4444]">*</span>
                   </span>
                   <input
                     type="tel"
-                    className={inputClass}
+                    className="h-12 w-full rounded-[10px] px-3 text-[14px] outline-none"
+                    style={inputStyle}
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = colors.accent;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = theme.controlBorder;
+                    }}
                     placeholder="+55 00 00000-0000"
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1.5 block text-[12px] text-[#A8B5AE]">
+                  <span className="mb-1.5 block text-[12px]" style={{ color: theme.soft }}>
                     Seu nome <span className="text-[#ef4444]">*</span>
                   </span>
                   <input
                     type="text"
-                    className={inputClass}
+                    className="h-12 w-full rounded-[10px] px-3 text-[14px] outline-none"
+                    style={inputStyle}
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = colors.accent;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = theme.controlBorder;
+                    }}
                     placeholder="Nome completo"
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1.5 block text-[12px] text-[#A8B5AE]">
+                  <span className="mb-1.5 block text-[12px]" style={{ color: theme.soft }}>
                     CEP para frete <span className="text-[#ef4444]">*</span>
                   </span>
                   <input
                     type="text"
                     inputMode="numeric"
-                    className={inputClass}
+                    className="h-12 w-full rounded-[10px] px-3 text-[14px] outline-none"
+                    style={inputStyle}
                     value={customerCep}
                     onChange={(e) => setCustomerCep(formatCep(e.target.value))}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = colors.accent;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = theme.controlBorder;
+                    }}
                     placeholder="00000-000"
                   />
-                  <p className="mt-1 text-[11px] text-[#6B7A72]">
+                  <p className="mt-1 text-[11px]" style={{ color: theme.muted }}>
                     Informe o CEP para ver preço e prazo — PAC e SEDEX
                   </p>
                 </label>
@@ -1647,11 +2251,12 @@ function CartSheet({
           >
             <button
               type="button"
-              onClick={sendWhatsApp}
-              className="flex h-14 w-full items-center justify-center rounded-[12px] text-[15px] font-semibold text-white transition hover:brightness-110 active:scale-[0.98]"
+              onClick={() => void sendWhatsApp()}
+              disabled={sending}
+              className="flex h-14 w-full items-center justify-center rounded-[12px] text-[15px] font-semibold text-white transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
               style={{ background: "#25D366", boxShadow: "0 8px 24px rgba(37,211,102,0.28)" }}
             >
-              Enviar pedido no WhatsApp
+              {sending ? "Atualizando estoque..." : "Enviar pedido no WhatsApp"}
             </button>
           </div>
         )}
@@ -1664,10 +2269,12 @@ function PickQtyInput({
   value,
   max,
   onChange,
+  accent = "#C9A84C",
 }: {
   value: number;
   max?: number;
   onChange: (qty: number) => void;
+  accent?: string;
 }) {
   const [draft, setDraft] = useState(String(value));
 
@@ -1688,10 +2295,16 @@ function PickQtyInput({
       inputMode="numeric"
       pattern="[0-9]*"
       aria-label="Quantidade"
-      className="h-10 w-12 rounded-[8px] border border-transparent bg-transparent text-center text-[16px] font-bold outline-none focus:border-[#C9A84C]"
+      className="h-10 w-12 rounded-[8px] border border-transparent bg-transparent text-center text-[16px] font-bold outline-none"
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = accent;
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = "transparent";
+        commit(draft);
+      }}
       value={draft}
       onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
-      onBlur={() => commit(draft)}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -1700,5 +2313,77 @@ function PickQtyInput({
         }
       }}
     />
+  );
+}
+
+/** Instant poster + muted autoplay iframe for faster YouTube open on mobile. */
+function YoutubeFastPlayer({
+  src,
+  poster,
+  title,
+}: {
+  src: string;
+  poster: string | null;
+  title: string;
+}) {
+  const [ready, setReady] = useState(false);
+  const [muted, setMuted] = useState(true);
+
+  const playerSrc = useMemo(() => {
+    try {
+      const url = new URL(src);
+      url.searchParams.set("mute", muted ? "1" : "0");
+      url.searchParams.set("autoplay", "1");
+      url.searchParams.set("playsinline", "1");
+      url.searchParams.set("rel", "0");
+      return url.toString();
+    } catch {
+      return src;
+    }
+  }, [src, muted]);
+
+  useEffect(() => {
+    setReady(false);
+  }, [playerSrc]);
+
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-black">
+      {poster && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={poster}
+          alt=""
+          className="absolute inset-0 h-full w-full object-contain transition-opacity duration-300"
+          style={{ opacity: ready ? 0 : 1 }}
+          decoding="async"
+        />
+      )}
+      {!ready && (
+        <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/55">
+            <span className="ml-0.5 h-0 w-0 border-y-[7px] border-l-[12px] border-y-transparent border-l-white" />
+          </div>
+        </div>
+      )}
+      <iframe
+        key={playerSrc}
+        src={playerSrc}
+        title={title}
+        className="relative z-[2] h-full w-full border-0"
+        style={{ opacity: ready ? 1 : 0 }}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+        onLoad={() => setReady(true)}
+      />
+      {muted && (
+        <button
+          type="button"
+          onClick={() => setMuted(false)}
+          className="absolute bottom-3 left-3 z-[3] rounded-full border border-white/20 bg-black/70 px-3 py-1.5 text-[11px] font-semibold text-white backdrop-blur-sm"
+        >
+          Ativar som
+        </button>
+      )}
+    </div>
   );
 }

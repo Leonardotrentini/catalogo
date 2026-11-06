@@ -18,6 +18,7 @@ create table if not exists public.products (
   name text not null,
   category text not null default '',
   qty integer not null default 0,
+  stock jsonb,
   sizes text[] not null default '{}',
   price text not null default '',
   colors text[] not null default '{}',

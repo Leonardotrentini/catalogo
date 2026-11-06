@@ -7,7 +7,7 @@ import { readAsDataURL } from "@/lib/utils";
 import { CatalogSlugEditor } from "./CatalogSlugEditor";
 import { HighlightsEditor } from "./HighlightsEditor";
 import { SellersEditor } from "./SellersEditor";
-import { getYoutubeEmbedUrl } from "@/lib/youtube";
+import { BRAND_VIDEO_POSITIONS, getYoutubeEmbedUrl, normalizeVideoPosition } from "@/lib/youtube";
 import { normalizeSellers, newSellerId } from "@/lib/sellers";
 import { digitsOnly } from "@/lib/utils";
 import type { BrandSeller } from "@/lib/types";
@@ -238,6 +238,39 @@ export function BrandTab({
             onChange={(e) => setBrand((prev) => ({ ...prev, videoUrl: e.target.value }))}
           />
           <span className="mt-1 block text-[11px] text-[#555]">Cole qualquer link do YouTube</span>
+          <span className="field-label mt-3">Título acima do vídeo</span>
+          <input
+            className="field-input"
+            placeholder="Ex.: Padrão de qualidade"
+            value={brand.videoTitle ?? "Padrão de qualidade"}
+            onChange={(e) => setBrand((prev) => ({ ...prev, videoTitle: e.target.value }))}
+          />
+          <span className="mt-1 block text-[11px] text-[#555]">
+            Aparece na home, em cima do vídeo. Apague o texto para ficar sem título.
+          </span>
+          <div className="mt-3">
+            <span className="field-label">Onde o vídeo aparece na home</span>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {BRAND_VIDEO_POSITIONS.map((option) => {
+                const active = normalizeVideoPosition(brand.videoPosition) === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setBrand((prev) => ({ ...prev, videoPosition: option.id }))}
+                    className="h-9 rounded-full px-3 text-[12px] font-medium"
+                    style={{
+                      border: active ? "1px solid #C9A84C" : "1px solid #1E3A2E",
+                      color: active ? "#C9A84C" : "#A8B5AE",
+                      background: active ? "#C9A84C18" : "transparent",
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           {embedUrl && (
             <iframe
               src={embedUrl}
@@ -274,6 +307,33 @@ export function BrandTab({
 
         <HighlightsEditor brand={brand} setBrand={setBrand} colors={colors} />
 
+        <section className="rounded-[12px] border border-[#1E3A2E] bg-[#0A1F18] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[15px] font-bold">Estoque por tamanho e cor</h2>
+              <p className="mt-1 text-[12px] leading-relaxed text-[#6B7A72]">
+                Desligado, a loja continua com um número só de estoque. Ligado, cada cor e tamanho tem a própria quantidade e some do catálogo ao chegar a 0.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={brand.stockControl === true}
+              onClick={() => setBrand((prev) => ({ ...prev, stockControl: prev.stockControl !== true }))}
+              className="relative h-8 w-14 shrink-0 rounded-full transition"
+              style={{ background: brand.stockControl === true ? "#25D366" : "#1E3A2E" }}
+            >
+              <span
+                className="absolute top-1 h-6 w-6 rounded-full bg-white transition"
+                style={{ left: brand.stockControl === true ? 28 : 4 }}
+              />
+            </button>
+          </div>
+          <p className="mt-2 text-[12px] font-semibold" style={{ color: brand.stockControl === true ? "#25D366" : "#6B7A72" }}>
+            {brand.stockControl === true ? "Ligado" : "Desligado"}
+          </p>
+        </section>
+
         <section>
           <h2 className="mb-1 text-[15px] font-bold">Botão principal</h2>
           <p className="mb-3 text-[12px] text-[#6B7A72]">
@@ -307,20 +367,47 @@ export function BrandTab({
 
         <section>
           <h2 className="mb-3 text-[15px] font-bold">Cores da marca</h2>
-          <div className="mb-4 flex h-8 w-full overflow-hidden rounded-[10px]">
+          <p className="mb-3 text-[12px] leading-relaxed text-[#A8B5AE]">
+            Essas cores valem na home, na página do produto e no carrinho.
+          </p>
+          <div className="mb-3 flex h-8 w-full overflow-hidden rounded-[10px]">
             <div style={{ flex: 3, background: colors.primary }} />
             <div style={{ flex: 2, background: colors.card }} />
             <div style={{ flex: 1, background: colors.accent }} />
             <div style={{ flex: 1, background: colors.text }} />
           </div>
+          <div className="mb-4 grid grid-cols-3 gap-2">
+            {[
+              { label: "Home", bg: colors.primary, card: colors.card, accent: colors.accent, text: colors.text },
+              { label: "Produto", bg: colors.primary, card: colors.card, accent: colors.accent, text: colors.text },
+              { label: "Carrinho", bg: colors.primary, card: colors.card, accent: colors.accent, text: colors.text },
+            ].map((preview) => (
+              <div
+                key={preview.label}
+                className="overflow-hidden rounded-[10px] border border-white/10"
+                style={{ background: preview.bg }}
+              >
+                <div className="px-2 pt-1.5 text-[10px] font-semibold" style={{ color: preview.text }}>
+                  {preview.label}
+                </div>
+                <div className="m-1.5 rounded-[6px] px-1.5 py-2" style={{ background: preview.card }}>
+                  <div className="h-1.5 w-10 rounded-full" style={{ background: preview.accent }} />
+                  <div
+                    className="mt-1 h-1 w-7 rounded-full opacity-60"
+                    style={{ background: preview.text }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <ColorField
-              label="Fundo principal"
+              label="Fundo (home, produto e carrinho)"
               value={colors.primary}
               onChange={(v) => setColors((prev) => ({ ...prev, primary: v }))}
             />
             <ColorField
-              label="Cor destaque"
+              label="Destaque (preço e ênfase)"
               value={colors.accent}
               onChange={(v) => setColors((prev) => ({ ...prev, accent: v }))}
             />
@@ -330,7 +417,7 @@ export function BrandTab({
               onChange={(v) => setColors((prev) => ({ ...prev, text: v }))}
             />
             <ColorField
-              label="Cards"
+              label="Cards e blocos"
               value={colors.card}
               onChange={(v) => setColors((prev) => ({ ...prev, card: v }))}
             />
