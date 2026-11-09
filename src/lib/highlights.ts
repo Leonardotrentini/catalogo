@@ -1,4 +1,5 @@
 import type { BrandHighlight, HighlightIcon, HighlightStyle } from "./types";
+import { withAlpha } from "./utils";
 
 export const HIGHLIGHT_STYLES: { id: HighlightStyle; label: string; description: string }[] = [
   { id: "pill", label: "Pill", description: "Ícone colorido + texto em cápsula" },
@@ -48,11 +49,16 @@ export function normalizeHighlights(raw: unknown): BrandHighlight[] {
       if (!item || typeof item !== "object") return null;
       const row = item as Partial<BrandHighlight>;
       if (!row.label?.trim()) return null;
+      const color =
+        typeof row.color === "string" && /^#[0-9a-fA-F]{6}$/.test(row.color.trim())
+          ? row.color.trim().toLowerCase()
+          : undefined;
       return {
         id: row.id || createHighlightId(),
         label: row.label.trim(),
         icon: (row.icon as HighlightIcon) || "star",
         enabled: row.enabled !== false,
+        ...(color ? { color } : {}),
       };
     })
     .filter(Boolean) as BrandHighlight[];
@@ -99,6 +105,16 @@ const ICON_COLORS: Record<HighlightIcon, { bg: string; fg: string }> = {
 
 export function highlightIconColors(icon: HighlightIcon) {
   return ICON_COLORS[icon] ?? { bg: "#1a3322", fg: "#C9A84C" };
+}
+
+/** Cor efetiva do destaque (custom ou padrão do ícone). */
+export function resolveHighlightColors(item: Pick<BrandHighlight, "icon" | "color">) {
+  const fallback = highlightIconColors(item.icon);
+  const custom = item.color?.trim();
+  if (custom && /^#[0-9a-fA-F]{6}$/.test(custom)) {
+    return { fg: custom, bg: withAlpha(custom, 0.22) };
+  }
+  return fallback;
 }
 
 export function getHighlightIconPath(icon: HighlightIcon): string {

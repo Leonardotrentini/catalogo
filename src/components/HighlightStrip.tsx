@@ -1,7 +1,7 @@
 "use client";
 
 import type { BrandColors, BrandHighlight, HighlightStyle } from "@/lib/types";
-import { highlightIconColors } from "@/lib/highlights";
+import { resolveHighlightColors } from "@/lib/highlights";
 import { HighlightIconSvg } from "./HighlightIcon";
 import { withAlpha } from "@/lib/utils";
 
@@ -35,7 +35,8 @@ function HighlightChip({
   style: HighlightStyle;
   colors: BrandColors;
 }) {
-  const palette = highlightIconColors(item.icon);
+  const palette = resolveHighlightColors(item);
+  const accent = item.color?.trim() || colors.accent;
 
   if (style === "minimal") {
     return (
@@ -58,9 +59,9 @@ function HighlightChip({
     return (
       <div
         className="flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5"
-        style={{ borderColor: withAlpha(colors.accent, 0.45), color: colors.text }}
+        style={{ borderColor: withAlpha(accent, 0.45), color: colors.text }}
       >
-        <HighlightIconSvg icon={item.icon} size={14} color={colors.accent} />
+        <HighlightIconSvg icon={item.icon} size={14} color={accent} />
         <span className="whitespace-nowrap text-[12px] font-semibold">{item.label}</span>
       </div>
     );

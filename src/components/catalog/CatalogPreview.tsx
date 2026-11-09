@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { Brand, BrandColors, CartItem, Product, ProductColorEntry } from "@/lib/types";
+import { surfaceColors } from "@/lib/catalogColors";
+import type { Brand, BrandColors, CartItem, CatalogColors, Product, ProductColorEntry } from "@/lib/types";
 import {
   colorNameFromHex,
   digitsOnly,
@@ -64,8 +65,8 @@ export function CatalogPreview({
   customProductColors,
 }: {
   brand: Brand;
-  colors: BrandColors;
-  setColors?: Dispatch<SetStateAction<BrandColors>>;
+  colors: CatalogColors;
+  setColors?: Dispatch<SetStateAction<CatalogColors>>;
   products: Product[];
   publicMode?: boolean;
   catalogSlug?: string;
@@ -105,6 +106,12 @@ export function CatalogPreview({
     if (!cartReady || !persistCart || !catalogSlug) return;
     writeStoredCart(catalogSlug, cart);
   }, [cart, cartReady, persistCart, catalogSlug]);
+
+  useEffect(() => {
+    if (brand.hideCategories === true && activeCategory) {
+      setActiveCategory(null);
+    }
+  }, [brand.hideCategories, activeCategory]);
 
   useEffect(() => {
     if (!publicMode) return;
@@ -355,78 +362,27 @@ export function CatalogPreview({
           </button>
         </header>
 
-        {!activeCategory ? (
+        {!activeCategory || brand.hideCategories === true ? (
           <HomeView
             brand={brand}
-            colors={colors}
+            colors={surfaceColors(colors, "home")}
             storeName={storeName}
             categories={categories}
+            products={shelfProducts}
+            pressedId={pressedId}
+            onPressProduct={setPressedId}
             onOpenCategory={setActiveCategory}
+            onOpenProduct={setActiveProduct}
             onOpenCart={() => setCartOpen(true)}
           />
         ) : (
-          <div className="grid grid-cols-2 gap-2 p-3">
-            {categoryProducts.map((product) => (
-              <button
-                type="button"
-                key={product.id}
-                onMouseDown={() => setPressedId(product.id)}
-                onMouseUp={() => setPressedId(null)}
-                onMouseLeave={() => setPressedId(null)}
-                onTouchStart={() => setPressedId(product.id)}
-                onTouchEnd={() => setPressedId(null)}
-                onClick={() => setActiveProduct(product)}
-                className="overflow-hidden text-left transition hover:brightness-110"
-                style={{
-                  background: colors.card,
-                  borderRadius: 14,
-                  transform: pressedId === product.id ? "scale(0.97)" : "scale(1)",
-                  transition: "transform 0.12s ease",
-                  color: colors.text,
-                  outline: pressedId === product.id ? `2px solid ${colors.accent}` : "2px solid transparent",
-                  cursor: "pointer",
-                }}
-              >
-                <div
-                  className="flex aspect-square w-full items-center justify-center"
-                  style={{ background: withAlpha(colors.primary, 0.55) }}
-                >
-                  {productThumbSrc(product) ? (
-                    <ProductThumbMedia product={product} />
-                  ) : (
-                    <div
-                      className="h-full w-full"
-                      style={{ background: `linear-gradient(135deg, ${colors.card}, ${colors.primary})` }}
-                    />
-                  )}
-                </div>
-                <div className="p-2.5">
-                  <div className="truncate text-[13px] font-bold">{product.name}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <span className="text-[16px] font-bold" style={{ color: colors.accent }}>
-                      R$ {formatMoney(product.price)}
-                    </span>
-                    {hasVolumePricing(product) && lowestTierUnitPrice(product) != null && (
-                      <span
-                        className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
-                        style={{ background: withAlpha(colors.accent, 0.15), color: colors.accent }}
-                      >
-                        A partir de R$ {formatMoney(lowestTierUnitPrice(product)!)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-2 flex items-center gap-1">
-                    {product.colors.slice(0, 4).map((c) => (
-                      <span key={c} className="h-3 w-3 rounded-full border border-white/10" style={{ background: c }} />
-                    ))}
-                    {product.colors.length > 4 && (
-                      <span className="text-[11px] opacity-60">+{product.colors.length - 4}</span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
+          <ProductGrid
+            products={categoryProducts}
+            colors={surfaceColors(colors, "home")}
+            pressedId={pressedId}
+            onPress={setPressedId}
+            onOpen={setActiveProduct}
+          />
         )}
 
         {toast && (
@@ -453,7 +409,7 @@ export function CatalogPreview({
           <ProductSheet
             product={activeProduct}
             stockControl={brand.stockControl === true}
-            colors={colors}
+            colors={surfaceColors(colors, "product")}
             cart={cart}
             publicMode={publicMode}
             colorLabel={colorLabel}
@@ -471,7 +427,7 @@ export function CatalogPreview({
         {cartOpen && (
           <CartSheet
             brand={brand}
-            colors={colors}
+            colors={surfaceColors(colors, "cart")}
             cart={cart}
             products={liveProducts}
             publicMode={publicMode}
@@ -586,24 +542,114 @@ function MiniPicker({
   );
 }
 
+function ProductGrid({
+  products,
+  colors,
+  pressedId,
+  onPress,
+  onOpen,
+  className = "grid grid-cols-2 gap-2 p-3",
+}: {
+  products: Product[];
+  colors: BrandColors;
+  pressedId: number | null;
+  onPress: (id: number | null) => void;
+  onOpen: (product: Product) => void;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      {products.map((product) => (
+        <button
+          type="button"
+          key={product.id}
+          onMouseDown={() => onPress(product.id)}
+          onMouseUp={() => onPress(null)}
+          onMouseLeave={() => onPress(null)}
+          onTouchStart={() => onPress(product.id)}
+          onTouchEnd={() => onPress(null)}
+          onClick={() => onOpen(product)}
+          className="overflow-hidden text-left transition hover:brightness-110"
+          style={{
+            background: colors.card,
+            borderRadius: 14,
+            transform: pressedId === product.id ? "scale(0.97)" : "scale(1)",
+            transition: "transform 0.12s ease",
+            color: colors.text,
+            outline: pressedId === product.id ? `2px solid ${colors.accent}` : "2px solid transparent",
+            cursor: "pointer",
+          }}
+        >
+          <div
+            className="flex aspect-square w-full items-center justify-center"
+            style={{ background: withAlpha(colors.primary, 0.55) }}
+          >
+            {productThumbSrc(product) ? (
+              <ProductThumbMedia product={product} />
+            ) : (
+              <div
+                className="h-full w-full"
+                style={{ background: `linear-gradient(135deg, ${colors.card}, ${colors.primary})` }}
+              />
+            )}
+          </div>
+          <div className="p-2.5">
+            <div className="truncate text-[13px] font-bold">{product.name}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="text-[16px] font-bold" style={{ color: colors.accent }}>
+                R$ {formatMoney(product.price)}
+              </span>
+              {hasVolumePricing(product) && lowestTierUnitPrice(product) != null && (
+                <span
+                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+                  style={{ background: withAlpha(colors.accent, 0.15), color: colors.accent }}
+                >
+                  A partir de R$ {formatMoney(lowestTierUnitPrice(product)!)}
+                </span>
+              )}
+            </div>
+            <div className="mt-2 flex items-center gap-1">
+              {product.colors.slice(0, 4).map((c) => (
+                <span key={c} className="h-3 w-3 rounded-full border border-white/10" style={{ background: c }} />
+              ))}
+              {product.colors.length > 4 && (
+                <span className="text-[11px] opacity-60">+{product.colors.length - 4}</span>
+              )}
+            </div>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function HomeView({
   brand,
   colors,
   storeName,
   categories,
+  products,
+  pressedId,
+  onPressProduct,
   onOpenCategory,
+  onOpenProduct,
   onOpenCart,
 }: {
   brand: Brand;
   colors: BrandColors;
   storeName: string;
   categories: { name: string; count: number; cover: string; coverVideo: boolean; coverPoster: string }[];
+  products: Product[];
+  pressedId: number | null;
+  onPressProduct: (id: number | null) => void;
   onOpenCategory: (name: string) => void;
+  onOpenProduct: (product: Product) => void;
   onOpenCart: () => void;
 }) {
   const embed = getYoutubeId(brand.videoUrl);
   const videoPosition = normalizeVideoPosition(brand.videoPosition);
   const video = embed ? <HomePresentationVideo brand={brand} colors={colors} /> : null;
+  const hideCategories = brand.hideCategories === true;
   const ig = brand.instagram.replace(/^@/, "").trim();
   const instagramHref = ig.includes("instagram.com")
     ? ig.startsWith("http")
@@ -646,61 +692,73 @@ function HomeView({
 
       {videoPosition === "after-highlights" && video}
 
-      <div className={`grid gap-2.5 px-4 ${categories.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
-        {categories.map((cat) => (
-          <button
-            type="button"
-            key={cat.name}
-            onClick={() => onOpenCategory(cat.name)}
-            className="relative overflow-hidden rounded-[14px] text-left transition hover:brightness-110 active:scale-[0.98]"
-            style={{ background: colors.card, cursor: "pointer" }}
-          >
-            <div
-              className={`relative w-full ${categories.length === 1 ? "aspect-[4/5]" : "aspect-[4/5]"}`}
-              style={{ background: withAlpha(colors.primary, 0.65) }}
+      {hideCategories ? (
+        <ProductGrid
+          products={products}
+          colors={colors}
+          pressedId={pressedId}
+          onPress={onPressProduct}
+          onOpen={onOpenProduct}
+          className="grid grid-cols-2 gap-2.5 px-4"
+        />
+      ) : (
+        <div className={`grid gap-2.5 px-4 ${categories.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+          {categories.map((cat) => (
+            <button
+              type="button"
+              key={cat.name}
+              onClick={() => onOpenCategory(cat.name)}
+              className="relative overflow-hidden rounded-[14px] text-left transition hover:brightness-110 active:scale-[0.98]"
+              style={{ background: colors.card, cursor: "pointer" }}
             >
-              {cat.cover || cat.coverPoster ? (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={cat.coverPoster || cat.cover}
-                    alt=""
-                    className="h-full w-full object-contain"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                  {cat.coverVideo && (
-                    <span
-                      className="pointer-events-none absolute bottom-3 right-3 z-[1] flex h-8 w-8 items-center justify-center rounded-full"
-                      style={{ background: "rgba(0,0,0,0.55)" }}
-                      aria-hidden
-                    >
-                      <span className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[10px] border-y-transparent border-l-white" />
-                    </span>
-                  )}
-                </>
-              ) : (
-                <div
-                  className="h-full w-full"
-                  style={{ background: `linear-gradient(135deg, ${colors.accent}55, ${colors.primary})` }}
-                />
-              )}
               <div
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  background: "linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.15) 45%, transparent 100%)",
-                }}
-              />
-              <div className="absolute bottom-2 left-2 right-2">
-                <div className="text-[14px] font-bold uppercase tracking-[0.04em]">{cat.name}</div>
-                <div className="text-[12px]" style={{ color: colors.accent }}>
-                  +{cat.count} modelos
+                className="relative w-full aspect-[4/5]"
+                style={{ background: withAlpha(colors.primary, 0.65) }}
+              >
+                {cat.cover || cat.coverPoster ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={cat.coverPoster || cat.cover}
+                      alt=""
+                      className="h-full w-full object-contain"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    {cat.coverVideo && (
+                      <span
+                        className="pointer-events-none absolute bottom-3 right-3 z-[1] flex h-8 w-8 items-center justify-center rounded-full"
+                        style={{ background: "rgba(0,0,0,0.55)" }}
+                        aria-hidden
+                      >
+                        <span className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[10px] border-y-transparent border-l-white" />
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <div
+                    className="h-full w-full"
+                    style={{ background: `linear-gradient(135deg, ${colors.accent}55, ${colors.primary})` }}
+                  />
+                )}
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    background:
+                      "linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.15) 45%, transparent 100%)",
+                  }}
+                />
+                <div className="absolute bottom-2 left-2 right-2">
+                  <div className="text-[14px] font-bold uppercase tracking-[0.04em]">{cat.name}</div>
+                  <div className="text-[12px]" style={{ color: colors.accent }}>
+                    +{cat.count} modelos
+                  </div>
                 </div>
               </div>
-            </div>
-          </button>
-        ))}
-      </div>
+            </button>
+          ))}
+        </div>
+      )}
 
       {videoPosition === "after-categories" && video}
 

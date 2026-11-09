@@ -1,11 +1,12 @@
-import { DEFAULT_BRAND, DEFAULT_COLORS } from "@/lib/constants";
+import { normalizeCatalogColors } from "@/lib/catalogColors";
+import { DEFAULT_BRAND } from "@/lib/constants";
 import { normalizeHighlightStyle, normalizeHighlights } from "@/lib/highlights";
 import { normalizeVolumeDiscounts } from "@/lib/pricing";
 import { normalizeBrandSellers, normalizeSellers, primaryWhatsAppDigits } from "@/lib/sellers";
 import { normalizeCategories } from "@/lib/categories";
 import { normalizeStock } from "@/lib/stock";
 import { normalizeVideoPosition } from "@/lib/youtube";
-import type { Brand, BrandColors, Product, ProductImage, VideoItem } from "@/lib/types";
+import type { Brand, CatalogColors, Product, ProductImage, VideoItem } from "@/lib/types";
 import { createSupabaseAdminClient } from "./admin";
 import { createSupabasePublicServerClient } from "./public-server";
 
@@ -25,6 +26,7 @@ function normalizeBrand(raw: Partial<Brand> | null | undefined): Brand {
     videoPosition: normalizeVideoPosition(merged.videoPosition),
     videoTitle: typeof merged.videoTitle === "string" ? merged.videoTitle : undefined,
     stockControl: merged.stockControl === true,
+    hideCategories: merged.hideCategories === true,
     categories: normalizeCategories(merged.categories),
   };
 }
@@ -33,7 +35,7 @@ type CatalogRow = {
   id: string;
   slug: string;
   brand: Brand;
-  colors: BrandColors;
+  colors: CatalogColors;
   is_published: boolean;
 };
 
@@ -83,7 +85,7 @@ function getCatalogDb() {
 
 export async function loadPublishedCatalog(slug: string): Promise<{
   brand: Brand;
-  colors: BrandColors;
+  colors: CatalogColors;
   products: Product[];
 } | null> {
   try {
@@ -118,7 +120,7 @@ export async function loadPublishedCatalog(slug: string): Promise<{
 
     return {
       brand: normalizeBrand(row.brand),
-      colors: { ...DEFAULT_COLORS, ...(row.colors ?? {}) },
+      colors: normalizeCatalogColors(row.colors),
       products: (productRows as ProductRow[] | null)?.map(mapProduct) ?? [],
     };
   } catch (err) {

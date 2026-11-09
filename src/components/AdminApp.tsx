@@ -8,7 +8,7 @@ import { PreviewTab } from "./PreviewTab";
 import { ProductsTab } from "./ProductsTab";
 import { TopBar } from "./TopBar";
 import { DEFAULT_BRAND, DEFAULT_COLORS } from "@/lib/constants";
-import type { AdminTab, Brand, BrandColors, Product, ProductColorEntry } from "@/lib/types";
+import type { AdminTab, Brand, CatalogColors, Product, ProductColorEntry } from "@/lib/types";
 import { normalizeHex } from "@/lib/utils";
 import {
   deleteProduct,
@@ -45,7 +45,7 @@ export function AdminApp({
   const [tab, setTab] = useState<AdminTab>("marca");
   const [activeSlug, setActiveSlug] = useState(catalogSlug);
   const [brand, setBrand] = useState<Brand>(DEFAULT_BRAND);
-  const [colors, setColors] = useState<BrandColors>(DEFAULT_COLORS);
+  const [colors, setColors] = useState<CatalogColors>(DEFAULT_COLORS);
   const [products, setProducts] = useState<Product[]>([]);
   const [catalogId, setCatalogId] = useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(false);

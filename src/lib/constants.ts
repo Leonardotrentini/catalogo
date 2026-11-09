@@ -71,6 +71,7 @@ export const DEFAULT_BRAND: Brand = {
   checkoutButtonText: "Finalizar pedido",
   checkoutButtonColor: "#25D366",
   stockControl: false,
+  hideCategories: false,
 };
 
 export const demoProducts: Product[] = [

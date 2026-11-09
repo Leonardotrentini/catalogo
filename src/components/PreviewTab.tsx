@@ -2,7 +2,7 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { CatalogPreview } from "./catalog/CatalogPreview";
-import type { Brand, BrandColors, Product, ProductColorEntry } from "@/lib/types";
+import type { Brand, CatalogColors, Product, ProductColorEntry } from "@/lib/types";
 
 export function PreviewTab({
   brand,
@@ -12,8 +12,8 @@ export function PreviewTab({
   customProductColors = [],
 }: {
   brand: Brand;
-  colors: BrandColors;
-  setColors: Dispatch<SetStateAction<BrandColors>>;
+  colors: CatalogColors;
+  setColors: Dispatch<SetStateAction<CatalogColors>>;
   products: Product[];
   customProductColors?: ProductColorEntry[];
 }) {

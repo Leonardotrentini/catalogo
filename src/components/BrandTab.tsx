@@ -1,7 +1,13 @@
 "use client";
 
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { Brand, BrandColors } from "@/lib/types";
+import {
+  patchSurfaceColors,
+  resetSurfaceColors,
+  surfaceColors,
+  surfaceHasCustomColors,
+} from "@/lib/catalogColors";
+import type { Brand, BrandColors, BrandSeller, CatalogColors, ColorSurface } from "@/lib/types";
 import { extractColorsFromDataUrl, mapExtractedToBrand } from "@/lib/extractColors";
 import { readAsDataURL } from "@/lib/utils";
 import { CatalogSlugEditor } from "./CatalogSlugEditor";
@@ -10,7 +16,12 @@ import { SellersEditor } from "./SellersEditor";
 import { BRAND_VIDEO_POSITIONS, getYoutubeEmbedUrl, normalizeVideoPosition } from "@/lib/youtube";
 import { normalizeSellers, newSellerId } from "@/lib/sellers";
 import { digitsOnly } from "@/lib/utils";
-import type { BrandSeller } from "@/lib/types";
+
+const COLOR_SURFACES: { id: ColorSurface; label: string }[] = [
+  { id: "home", label: "Home" },
+  { id: "product", label: "Produto" },
+  { id: "cart", label: "Carrinho" },
+];
 
 function ColorField({
   label,
@@ -53,12 +64,19 @@ export function BrandTab({
 }: {
   brand: Brand;
   setBrand: Dispatch<SetStateAction<Brand>>;
-  colors: BrandColors;
-  setColors: Dispatch<SetStateAction<BrandColors>>;
+  colors: CatalogColors;
+  setColors: Dispatch<SetStateAction<CatalogColors>>;
   catalogId?: string;
   catalogSlug?: string;
   onCatalogSlugSaved?: (slug: string) => void;
 }) {
+  const [colorSurface, setColorSurface] = useState<ColorSurface>("home");
+  const activeColors = surfaceColors(colors, colorSurface);
+  const customized = surfaceHasCustomColors(colors, colorSurface);
+
+  function updateActiveColor(key: keyof BrandColors, value: string) {
+    setColors((prev) => patchSurfaceColors(prev, colorSurface, { [key]: value }));
+  }
   const logoRef = useRef<HTMLInputElement>(null);
   const bannerRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
@@ -177,7 +195,13 @@ export function BrandTab({
               </div>
               <button
                 type="button"
-                onClick={() => setColors(mapExtractedToBrand(extracted))}
+                onClick={() =>
+                  setColors((prev) => ({
+                    ...mapExtractedToBrand(extracted),
+                    ...(prev.product ? { product: prev.product } : {}),
+                    ...(prev.cart ? { cart: prev.cart } : {}),
+                  }))
+                }
                 className="mt-3 h-11 rounded-[10px] border border-[#C9A84C] px-4 text-[13px] font-semibold text-[#C9A84C]"
               >
                 Aplicar na marca
@@ -310,6 +334,38 @@ export function BrandTab({
         <section className="rounded-[12px] border border-[#1E3A2E] bg-[#0A1F18] p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
+              <h2 className="text-[15px] font-bold">Pastas de categoria</h2>
+              <p className="mt-1 text-[12px] leading-relaxed text-[#6B7A72]">
+                Ligado, a home mostra pastas (Camisetas, Bermudas…). Desligado, os produtos aparecem direto na home, como em um site.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={brand.hideCategories !== true}
+              onClick={() =>
+                setBrand((prev) => ({ ...prev, hideCategories: prev.hideCategories !== true }))
+              }
+              className="relative h-8 w-14 shrink-0 rounded-full transition"
+              style={{ background: brand.hideCategories !== true ? "#25D366" : "#1E3A2E" }}
+            >
+              <span
+                className="absolute top-1 h-6 w-6 rounded-full bg-white transition"
+                style={{ left: brand.hideCategories !== true ? 28 : 4 }}
+              />
+            </button>
+          </div>
+          <p
+            className="mt-2 text-[12px] font-semibold"
+            style={{ color: brand.hideCategories !== true ? "#25D366" : "#6B7A72" }}
+          >
+            {brand.hideCategories !== true ? "Pastas na home" : "Só produtos na home"}
+          </p>
+        </section>
+
+        <section className="rounded-[12px] border border-[#1E3A2E] bg-[#0A1F18] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
               <h2 className="text-[15px] font-bold">Estoque por tamanho e cor</h2>
               <p className="mt-1 text-[12px] leading-relaxed text-[#6B7A72]">
                 Desligado, a loja continua com um número só de estoque. Ligado, cada cor e tamanho tem a própria quantidade e some do catálogo ao chegar a 0.
@@ -368,58 +424,91 @@ export function BrandTab({
         <section>
           <h2 className="mb-3 text-[15px] font-bold">Cores da marca</h2>
           <p className="mb-3 text-[12px] leading-relaxed text-[#A8B5AE]">
-            Essas cores valem na home, na página do produto e no carrinho.
+            Selecione Home, Produto ou Carrinho e ajuste as cores de cada tela. Produto e carrinho
+            começam iguais à home até você personalizar.
           </p>
-          <div className="mb-3 flex h-8 w-full overflow-hidden rounded-[10px]">
-            <div style={{ flex: 3, background: colors.primary }} />
-            <div style={{ flex: 2, background: colors.card }} />
-            <div style={{ flex: 1, background: colors.accent }} />
-            <div style={{ flex: 1, background: colors.text }} />
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            {COLOR_SURFACES.map((item) => {
+              const preview = surfaceColors(colors, item.id);
+              const active = colorSurface === item.id;
+              const hasCustom = surfaceHasCustomColors(colors, item.id) && item.id !== "home";
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setColorSurface(item.id)}
+                  className="overflow-hidden rounded-[10px] text-left transition"
+                  style={{
+                    background: preview.primary,
+                    outline: active ? `2px solid #C9A84C` : "2px solid transparent",
+                    outlineOffset: 1,
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-1 px-2 pt-1.5">
+                    <span className="text-[10px] font-semibold" style={{ color: preview.text }}>
+                      {item.label}
+                    </span>
+                    {hasCustom && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide text-[#C9A84C]">
+                        custom
+                      </span>
+                    )}
+                  </div>
+                  <div className="m-1.5 rounded-[6px] px-1.5 py-2" style={{ background: preview.card }}>
+                    <div className="h-1.5 w-10 rounded-full" style={{ background: preview.accent }} />
+                    <div
+                      className="mt-1 h-1 w-7 rounded-full opacity-60"
+                      style={{ background: preview.text }}
+                    />
+                  </div>
+                </button>
+              );
+            })}
           </div>
-          <div className="mb-4 grid grid-cols-3 gap-2">
-            {[
-              { label: "Home", bg: colors.primary, card: colors.card, accent: colors.accent, text: colors.text },
-              { label: "Produto", bg: colors.primary, card: colors.card, accent: colors.accent, text: colors.text },
-              { label: "Carrinho", bg: colors.primary, card: colors.card, accent: colors.accent, text: colors.text },
-            ].map((preview) => (
-              <div
-                key={preview.label}
-                className="overflow-hidden rounded-[10px] border border-white/10"
-                style={{ background: preview.bg }}
+          <div className="mb-3 flex h-8 w-full overflow-hidden rounded-[10px]">
+            <div style={{ flex: 3, background: activeColors.primary }} />
+            <div style={{ flex: 2, background: activeColors.card }} />
+            <div style={{ flex: 1, background: activeColors.accent }} />
+            <div style={{ flex: 1, background: activeColors.text }} />
+          </div>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-[12px] text-[#A8B5AE]">
+              Editando:{" "}
+              <span className="font-semibold text-[#C9A84C]">
+                {COLOR_SURFACES.find((item) => item.id === colorSurface)?.label}
+              </span>
+              {colorSurface !== "home" && !customized ? " · igual à home" : ""}
+            </p>
+            {colorSurface !== "home" && customized && (
+              <button
+                type="button"
+                onClick={() => setColors((prev) => resetSurfaceColors(prev, colorSurface))}
+                className="shrink-0 rounded-[8px] border border-[#1E3A2E] px-2.5 py-1 text-[11px] font-semibold text-[#A8B5AE]"
               >
-                <div className="px-2 pt-1.5 text-[10px] font-semibold" style={{ color: preview.text }}>
-                  {preview.label}
-                </div>
-                <div className="m-1.5 rounded-[6px] px-1.5 py-2" style={{ background: preview.card }}>
-                  <div className="h-1.5 w-10 rounded-full" style={{ background: preview.accent }} />
-                  <div
-                    className="mt-1 h-1 w-7 rounded-full opacity-60"
-                    style={{ background: preview.text }}
-                  />
-                </div>
-              </div>
-            ))}
+                Usar cores da home
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <ColorField
-              label="Fundo (home, produto e carrinho)"
-              value={colors.primary}
-              onChange={(v) => setColors((prev) => ({ ...prev, primary: v }))}
+              label="Fundo"
+              value={activeColors.primary}
+              onChange={(v) => updateActiveColor("primary", v)}
             />
             <ColorField
               label="Destaque (preço e ênfase)"
-              value={colors.accent}
-              onChange={(v) => setColors((prev) => ({ ...prev, accent: v }))}
+              value={activeColors.accent}
+              onChange={(v) => updateActiveColor("accent", v)}
             />
             <ColorField
               label="Texto"
-              value={colors.text}
-              onChange={(v) => setColors((prev) => ({ ...prev, text: v }))}
+              value={activeColors.text}
+              onChange={(v) => updateActiveColor("text", v)}
             />
             <ColorField
               label="Cards e blocos"
-              value={colors.card}
-              onChange={(v) => setColors((prev) => ({ ...prev, card: v }))}
+              value={activeColors.card}
+              onChange={(v) => updateActiveColor("card", v)}
             />
           </div>
         </section>

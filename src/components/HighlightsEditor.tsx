@@ -7,6 +7,7 @@ import {
   HIGHLIGHT_STYLES,
   createHighlightId,
   defaultHighlights,
+  highlightIconColors,
 } from "@/lib/highlights";
 import { HighlightIconSvg } from "./HighlightIcon";
 import { HighlightStrip } from "./HighlightStrip";
@@ -44,6 +45,20 @@ export function HighlightsEditor({
 
   function updateIcon(id: string, icon: HighlightIcon) {
     updateHighlights(highlights.map((item) => (item.id === id ? { ...item, icon } : item)));
+  }
+
+  function updateColor(id: string, color: string) {
+    updateHighlights(highlights.map((item) => (item.id === id ? { ...item, color } : item)));
+  }
+
+  function clearColor(id: string) {
+    updateHighlights(
+      highlights.map((item) => {
+        if (item.id !== id) return item;
+        const { color: _removed, ...rest } = item;
+        return rest;
+      }),
+    );
   }
 
   function removeItem(id: string) {
@@ -147,6 +162,38 @@ export function HighlightsEditor({
                       </button>
                     );
                   })}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-[#6B7A72]">Cor</span>
+                  <div className="relative h-9 w-9 shrink-0">
+                    <div
+                      className="h-9 w-9 rounded-[8px] border border-[#1E3A2E]"
+                      style={{
+                        background: item.color || highlightIconColors(item.icon).fg,
+                        boxShadow: `0 0 12px ${(item.color || highlightIconColors(item.icon).fg)}66`,
+                      }}
+                    />
+                    <input
+                      type="color"
+                      value={item.color || highlightIconColors(item.icon).fg}
+                      onChange={(e) => updateColor(item.id, e.target.value)}
+                      className="absolute inset-0 h-9 w-9 cursor-pointer opacity-0"
+                      aria-label={`Cor do destaque ${item.label}`}
+                    />
+                  </div>
+                  <span className="font-mono text-[12px] uppercase text-[#A8B5AE]">
+                    {item.color || highlightIconColors(item.icon).fg}
+                  </span>
+                  {item.color && (
+                    <button
+                      type="button"
+                      onClick={() => clearColor(item.id)}
+                      className="rounded-[8px] border border-[#1E3A2E] px-2 py-1 text-[11px] text-[#A8B5AE]"
+                    >
+                      Padrão
+                    </button>
+                  )}
                 </div>
               </div>
 

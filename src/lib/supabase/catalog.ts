@@ -5,7 +5,8 @@ import { normalizeBrandSellers, normalizeSellers, primaryWhatsAppDigits } from "
 import { normalizeCategories } from "@/lib/categories";
 import { normalizeStock } from "@/lib/stock";
 import { normalizeVideoPosition } from "@/lib/youtube";
-import type { Brand, BrandColors, Product, ProductImage, VideoItem } from "@/lib/types";
+import { normalizeCatalogColors } from "@/lib/catalogColors";
+import type { Brand, CatalogColors, Product, ProductImage, VideoItem } from "@/lib/types";
 import { getSupabase } from "./client";
 
 export const DEFAULT_CATALOG_SLUG = "default";
@@ -26,6 +27,7 @@ function normalizeBrand(raw: Partial<Brand> | null | undefined): Brand {
     videoPosition: normalizeVideoPosition(merged.videoPosition),
     videoTitle: typeof merged.videoTitle === "string" ? merged.videoTitle : undefined,
     stockControl: merged.stockControl === true,
+    hideCategories: merged.hideCategories === true,
     categories: normalizeCategories(merged.categories),
     customProductColors: Array.isArray(merged.customProductColors)
       ? merged.customProductColors
@@ -39,7 +41,7 @@ type CatalogRow = {
   id: string;
   slug: string;
   brand: Brand;
-  colors: BrandColors;
+  colors: CatalogColors;
   is_published: boolean;
 };
 
@@ -86,7 +88,7 @@ export async function loadCatalog(
   catalogId: string;
   slug: string;
   brand: Brand;
-  colors: BrandColors;
+  colors: CatalogColors;
   products: Product[];
   isPublished: boolean;
 }> {
@@ -133,7 +135,7 @@ export async function loadCatalog(
     catalogId: row.id,
     slug: row.slug,
     brand: normalizeBrand(row.brand),
-    colors: { ...DEFAULT_COLORS, ...(row.colors ?? {}) },
+    colors: normalizeCatalogColors(row.colors),
     products: (productRows as ProductRow[] | null)?.map(mapProduct) ?? [],
     isPublished: Boolean(row.is_published),
   };
@@ -142,7 +144,7 @@ export async function loadCatalog(
 export async function saveBrandAndColors(
   catalogId: string,
   brand: Brand,
-  colors: BrandColors,
+  colors: CatalogColors,
 ): Promise<void> {
   const { error } = await getSupabase()
     .from("catalogs")

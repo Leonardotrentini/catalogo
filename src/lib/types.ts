@@ -49,6 +49,14 @@ export interface BrandColors {
   card: string;
 }
 
+export type ColorSurface = "home" | "product" | "cart";
+
+/** Paleta da home + overrides opcionais de produto/carrinho (jsonb catalogs.colors). */
+export interface CatalogColors extends BrandColors {
+  product?: BrandColors;
+  cart?: BrandColors;
+}
+
 export interface BrandSeller {
   id: string;
   name: string;
@@ -76,6 +84,11 @@ export interface Brand {
   videoPosition?: BrandVideoPosition;
   /** Liga o estoque por cor e tamanho. Ausente ou falso mantém o estoque único. */
   stockControl?: boolean;
+  /**
+   * Se true, a home lista os produtos direto (estilo e-commerce),
+   * sem pastas de categoria.
+   */
+  hideCategories?: boolean;
   /** Pastas do catálogo (podem existir vazias). Produtos usam product.category. */
   categories?: string[];
   customProductColors?: ProductColorEntry[];
@@ -105,6 +118,8 @@ export interface BrandHighlight {
   label: string;
   icon: HighlightIcon;
   enabled: boolean;
+  /** Cor do ícone/ênfase do destaque. Ausente usa a cor padrão do ícone. */
+  color?: string;
 }
 
 export interface CartItem {
