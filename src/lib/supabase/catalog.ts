@@ -34,6 +34,10 @@ function normalizeBrand(raw: Partial<Brand> | null | undefined): Brand {
           .filter((c) => c && typeof c.name === "string" && typeof c.hex === "string")
           .map((c) => ({ name: c.name.trim(), hex: c.hex.trim().toLowerCase() }))
       : [],
+    metaPixelId:
+      typeof merged.metaPixelId === "string" ? merged.metaPixelId.replace(/\D/g, "") : undefined,
+    metaApiToken:
+      typeof merged.metaApiToken === "string" ? merged.metaApiToken.trim() || undefined : undefined,
   };
 }
 

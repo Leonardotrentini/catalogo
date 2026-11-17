@@ -41,6 +41,7 @@ import { normalizeSellers, primaryWhatsAppDigits } from "@/lib/sellers";
 import { readStoredCart, writeStoredCart } from "@/lib/cartStorage";
 import { availableColors, availableSizes, isListedInCatalog, lineQty, usesStockMatrix } from "@/lib/stock";
 import { buildWhatsAppOrderMessage, whatsAppOrderFits, whatsAppOrderUrl } from "@/lib/whatsappOrder";
+import { META_CUSTOM_EVENTS, fireCatalogMetaEvent } from "@/lib/metaTracking";
 
 /** Cores derivadas da paleta da marca (home, produto e carrinho). */
 function catalogTheme(colors: BrandColors) {
@@ -112,6 +113,20 @@ export function CatalogPreview({
       setActiveCategory(null);
     }
   }, [brand.hideCategories, activeCategory]);
+
+  useEffect(() => {
+    if (!publicMode || !catalogSlug) return;
+    const pixelId = brand.metaPixelId?.trim();
+    if (!pixelId) return;
+    void fireCatalogMetaEvent({
+      slug: catalogSlug,
+      pixelId,
+      eventName: META_CUSTOM_EVENTS.pageview,
+      dual: true,
+    });
+    // Uma vez por abertura do catálogo público.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicMode, catalogSlug]);
 
   useEffect(() => {
     if (!publicMode) return;
@@ -1865,6 +1880,18 @@ function CartSheet({
       return;
     } finally {
       setSending(false);
+    }
+
+    if (publicMode && catalogSlug && brand.metaPixelId?.trim()) {
+      void fireCatalogMetaEvent({
+        slug: catalogSlug,
+        pixelId: brand.metaPixelId,
+        eventName: META_CUSTOM_EVENTS.addCart,
+        value: total,
+        currency: "BRL",
+        extra: { pieces, source: "whatsapp_checkout" },
+        dual: true,
+      });
     }
 
     if (whatsAppOrderFits(storeDigits, msg)) {

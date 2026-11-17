@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { BrandTab } from "./BrandTab";
 import { CouponsTab } from "./CouponsTab";
 import { IntegrationsTab } from "./IntegrationsTab";
+import { PixelTrackingTab } from "./PixelTrackingTab";
 import { PreviewTab } from "./PreviewTab";
 import { ProductsTab } from "./ProductsTab";
 import { TopBar } from "./TopBar";
@@ -25,6 +26,7 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "marca", label: "Marca" },
   { id: "produtos", label: "Produtos" },
   { id: "cupons", label: "Cupons" },
+  { id: "pixel", label: "Pixel" },
   { id: "integracoes", label: "Integrações" },
   { id: "preview", label: "Preview" },
 ];
@@ -244,7 +246,7 @@ export function AdminApp({
         <nav className="border-b border-[rgba(201,168,76,0.1)] bg-[#0A1F18]/95 px-4 py-3 backdrop-blur-md">
           <div className="mx-auto flex max-w-[680px] justify-center">
             <div
-              className="inline-flex items-center gap-1 rounded-full border border-[rgba(201,168,76,0.2)] bg-[#0F281F] p-1"
+              className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-[rgba(201,168,76,0.2)] bg-[#0F281F] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               role="tablist"
               aria-label="Seções do painel"
             >
@@ -330,6 +332,9 @@ export function AdminApp({
             />
           )}
           {tab === "cupons" && catalogId && <CouponsTab catalogId={catalogId} />}
+          {tab === "pixel" && (
+            <PixelTrackingTab brand={brand} setBrand={setBrand} catalogSlug={activeSlug} />
+          )}
           {tab === "integracoes" && <IntegrationsTab />}
       </main>
     </div>

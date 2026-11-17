@@ -1,6 +1,7 @@
 import { normalizeCatalogColors } from "@/lib/catalogColors";
 import { DEFAULT_BRAND } from "@/lib/constants";
 import { normalizeHighlightStyle, normalizeHighlights } from "@/lib/highlights";
+import { stripBrandTrackingSecrets } from "@/lib/metaTracking";
 import { normalizeVolumeDiscounts } from "@/lib/pricing";
 import { normalizeBrandSellers, normalizeSellers, primaryWhatsAppDigits } from "@/lib/sellers";
 import { normalizeCategories } from "@/lib/categories";
@@ -28,6 +29,10 @@ function normalizeBrand(raw: Partial<Brand> | null | undefined): Brand {
     stockControl: merged.stockControl === true,
     hideCategories: merged.hideCategories === true,
     categories: normalizeCategories(merged.categories),
+    metaPixelId:
+      typeof merged.metaPixelId === "string" ? merged.metaPixelId.replace(/\D/g, "") : undefined,
+    metaApiToken:
+      typeof merged.metaApiToken === "string" ? merged.metaApiToken.trim() || undefined : undefined,
   };
 }
 
@@ -119,7 +124,7 @@ export async function loadPublishedCatalog(slug: string): Promise<{
     }
 
     return {
-      brand: normalizeBrand(row.brand),
+      brand: stripBrandTrackingSecrets(normalizeBrand(row.brand)),
       colors: normalizeCatalogColors(row.colors),
       products: (productRows as ProductRow[] | null)?.map(mapProduct) ?? [],
     };

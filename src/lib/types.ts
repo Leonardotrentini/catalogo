@@ -92,6 +92,13 @@ export interface Brand {
   /** Pastas do catálogo (podem existir vazias). Produtos usam product.category. */
   categories?: string[];
   customProductColors?: ProductColorEntry[];
+  /** Meta Pixel ID (público no catálogo). */
+  metaPixelId?: string;
+  /**
+   * Token da Conversions API da Meta.
+   * Nunca enviar no catálogo público — só no admin / servidor.
+   */
+  metaApiToken?: string;
 }
 
 export interface ProductColorEntry {
@@ -164,7 +171,9 @@ export interface CouponSale {
   createdAt: string;
 }
 
-export type AdminTab = "marca" | "produtos" | "preview" | "integracoes" | "cupons";
+export type AdminTab = "marca" | "produtos" | "preview" | "integracoes" | "cupons" | "pixel";
+
+export type MetaCustomEventName = "PAGEVIEW_CATALOGO" | "ADDCART_CATALOGO";
 
 export type UserRole = "super_admin" | "tenant";
 
