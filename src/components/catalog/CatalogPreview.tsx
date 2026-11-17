@@ -1187,48 +1187,142 @@ function ProductSheet({
           </div>
           {volumeTiers.length > 0 && (
             <div
-              className="mt-2 rounded-[10px] px-3 py-2"
-              style={{ border: `1px solid ${theme.border}`, background: colors.card }}
+              className="mt-3 overflow-hidden rounded-[14px]"
+              style={{ border: `1px solid ${theme.borderAccent}`, background: colors.card }}
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-[11px] font-semibold" style={{ color: theme.soft }}>
-                  Desconto por quantidade
+              <div className="px-3.5 pb-2 pt-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[14px] font-bold leading-tight" style={{ color: colors.text }}>
+                      Desconto por quantidade
+                    </div>
+                    <div className="mt-1 text-[12px]" style={{ color: theme.muted }}>
+                      Quanto mais peças, menor o preço
+                    </div>
+                  </div>
+                  {cartPieces > 0 && (
+                    <span
+                      className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                      style={{
+                        background: withAlpha(colors.accent, 0.14),
+                        color: colors.accent,
+                      }}
+                    >
+                      {cartPieces} no carrinho
+                    </span>
+                  )}
                 </div>
-                {cartPieces > 0 && (
-                  <span className="text-[10px]" style={{ color: theme.muted }}>
-                    {cartPieces} no carrinho · total {tierQty} peça(s)
-                  </span>
-                )}
               </div>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {volumeTiers.map((tier) => (
-                  <span
-                    key={`${tier.minQty}-${tier.unitPrice}`}
-                    className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    style={{
-                      background:
-                        tierQty >= tier.minQty
-                          ? withAlpha(colors.accent, 0.2)
-                          : withAlpha(colors.text, 0.06),
-                      color: tierQty >= tier.minQty ? colors.accent : theme.muted,
-                      border: `1px solid ${
-                        tierQty >= tier.minQty ? withAlpha(colors.accent, 0.4) : theme.border
-                      }`,
-                    }}
-                  >
-                    {tier.minQty}+ peças → R$ {formatMoney(tier.unitPrice)}/un.
-                  </span>
-                ))}
+
+              <div className="px-2.5 pb-2.5">
+                <div className="space-y-1.5">
+                  {volumeTiers.map((tier, tierIndex) => {
+                    const tierPrice = parsePrice(tier.unitPrice);
+                    const reached = tierQty >= tier.minQty;
+                    const nextTier = volumeTiers[tierIndex + 1];
+                    const isCurrent =
+                      reached && (!nextTier || tierQty < nextTier.minQty);
+                    const isNextTarget =
+                      !hasTierPrice && tierIndex === 0
+                        ? true
+                        : !reached &&
+                          (tierIndex === 0 || tierQty >= volumeTiers[tierIndex - 1].minQty);
+                    const highlight = isCurrent || (!hasTierPrice && isNextTarget && tierIndex === 0);
+                    const savePct =
+                      baseUnitPrice > 0
+                        ? Math.max(0, Math.round(((baseUnitPrice - tierPrice) / baseUnitPrice) * 100))
+                        : 0;
+                    const saveMoney = Math.max(0, baseUnitPrice - tierPrice);
+
+                    return (
+                      <div
+                        key={`${tier.minQty}-${tier.unitPrice}`}
+                        className="flex items-center gap-3 rounded-[12px] px-3 py-3 transition"
+                        style={{
+                          background: highlight
+                            ? withAlpha(colors.accent, 0.16)
+                            : withAlpha(colors.text, 0.04),
+                          border: `1px solid ${
+                            highlight ? withAlpha(colors.accent, 0.55) : withAlpha(colors.text, 0.08)
+                          }`,
+                          opacity: !reached && !highlight ? 0.72 : 1,
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-[13px] font-semibold"
+                              style={{ color: highlight ? colors.accent : colors.text }}
+                            >
+                              A partir de {tier.minQty}
+                            </span>
+                            <span className="text-[12px]" style={{ color: theme.muted }}>
+                              peça{tier.minQty === 1 ? "" : "s"}
+                            </span>
+                            {isCurrent && (
+                              <span
+                                className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                                style={{
+                                  background: colors.accent,
+                                  color: colors.primary,
+                                }}
+                              >
+                                Atual
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className="mt-1 text-[18px] font-bold leading-none"
+                            style={{ color: highlight ? colors.accent : colors.text }}
+                          >
+                            R$ {formatMoney(tier.unitPrice)}
+                            <span className="ml-1 text-[12px] font-medium" style={{ color: theme.muted }}>
+                              /un.
+                            </span>
+                          </div>
+                        </div>
+
+                        {savePct > 0 && (
+                          <div className="shrink-0 text-right">
+                            <div
+                              className="rounded-full px-2.5 py-1 text-[12px] font-bold"
+                              style={{
+                                background: highlight
+                                  ? colors.accent
+                                  : withAlpha(colors.accent, 0.14),
+                                color: highlight ? colors.primary : colors.accent,
+                              }}
+                            >
+                              −{savePct}%
+                            </div>
+                            <div className="mt-1 text-[10px]" style={{ color: theme.muted }}>
+                              −R$ {formatMoney(saveMoney)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              {hasTierPrice && (
-                <div className="mt-1.5 text-[11px]" style={{ color: theme.muted }}>
-                  De R$ {formatMoney(product.price)} por{" "}
+
+              {hasTierPrice ? (
+                <div
+                  className="border-t px-3.5 py-2.5 text-[12px]"
+                  style={{ borderColor: withAlpha(colors.text, 0.08), color: theme.muted }}
+                >
+                  Preço aplicado agora:{" "}
                   <span className="font-semibold" style={{ color: colors.accent }}>
                     R$ {formatMoney(displayUnitPrice)}/un.
                   </span>
-                  {cartPieces > 0 && (
-                    <span> (inclui peças já no carrinho)</span>
-                  )}
+                  {cartPieces > 0 ? " · inclui peças do carrinho" : ""}
+                </div>
+              ) : (
+                <div
+                  className="border-t px-3.5 py-2.5 text-[12px]"
+                  style={{ borderColor: withAlpha(colors.text, 0.08), color: theme.muted }}
+                >
+                  Leve {volumeTiers[0].minQty}+ peças para desbloquear o 1º desconto
                 </div>
               )}
             </div>
