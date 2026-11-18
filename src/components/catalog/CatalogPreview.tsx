@@ -298,10 +298,13 @@ export function CatalogPreview({
       )}
 
       <div
-        className="relative mx-auto overflow-hidden"
+        className={
+          publicMode
+            ? "relative mx-auto w-full max-w-[480px] overflow-hidden lg:max-w-[1120px]"
+            : "relative mx-auto overflow-hidden"
+        }
         style={{
-          maxWidth: publicMode ? 480 : 390,
-          width: publicMode ? "100%" : undefined,
+          maxWidth: publicMode ? undefined : 390,
           borderRadius: publicMode ? 0 : 20,
           border: publicMode ? "none" : "1px solid rgba(255,255,255,0.06)",
           boxShadow: publicMode ? "none" : "0 24px 64px rgba(0,0,0,0.55)",
@@ -311,7 +314,9 @@ export function CatalogPreview({
         }}
       >
         <header
-          className="sticky top-0 z-20 flex items-center justify-between px-4 py-3"
+          className={`sticky top-0 z-20 flex items-center justify-between px-4 py-3 ${
+            publicMode ? "lg:px-6 lg:py-4" : ""
+          }`}
           style={{
             background: withAlpha(colors.primary, 0.82),
             backdropFilter: "blur(12px)",
@@ -327,16 +332,30 @@ export function CatalogPreview({
                 style={{ color: colors.text }}
               >
                 <span className="text-[18px]">‹</span>
-                <span className="truncate text-[14px] font-bold">{activeCategory}</span>
+                <span className={`truncate font-bold ${publicMode ? "text-[14px] lg:text-[16px]" : "text-[14px]"}`}>
+                  {activeCategory}
+                </span>
                 <span className="text-[12px] opacity-50">({categoryProducts.length})</span>
               </button>
             ) : (
               <div className="flex min-w-0 items-center gap-2">
                 {brand.logo ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={brand.logo} alt="" className="h-7 w-7 rounded object-contain" />
+                  <img
+                    src={brand.logo}
+                    alt=""
+                    className={
+                      publicMode
+                        ? "h-7 w-7 rounded object-contain lg:h-9 lg:w-9"
+                        : "h-7 w-7 rounded object-contain"
+                    }
+                  />
                 ) : null}
-                <span className="truncate text-[14px] font-bold">{storeName}</span>
+                <span
+                  className={`truncate font-bold ${publicMode ? "text-[14px] lg:text-[16px]" : "text-[14px]"}`}
+                >
+                  {storeName}
+                </span>
               </div>
             )}
           </div>
@@ -385,6 +404,7 @@ export function CatalogPreview({
             categories={categories}
             products={shelfProducts}
             pressedId={pressedId}
+            publicMode={publicMode}
             onPressProduct={setPressedId}
             onOpenCategory={setActiveCategory}
             onOpenProduct={setActiveProduct}
@@ -397,6 +417,11 @@ export function CatalogPreview({
             pressedId={pressedId}
             onPress={setPressedId}
             onOpen={setActiveProduct}
+            className={
+              publicMode
+                ? "grid grid-cols-2 gap-2 p-3 lg:grid-cols-4 lg:gap-3 lg:p-5"
+                : "grid grid-cols-2 gap-2 p-3"
+            }
           />
         )}
 
@@ -645,6 +670,7 @@ function HomeView({
   categories,
   products,
   pressedId,
+  publicMode = false,
   onPressProduct,
   onOpenCategory,
   onOpenProduct,
@@ -656,6 +682,7 @@ function HomeView({
   categories: { name: string; count: number; cover: string; coverVideo: boolean; coverPoster: string }[];
   products: Product[];
   pressedId: number | null;
+  publicMode?: boolean;
   onPressProduct: (id: number | null) => void;
   onOpenCategory: (name: string) => void;
   onOpenProduct: (product: Product) => void;
@@ -673,9 +700,23 @@ function HomeView({
     : `https://instagram.com/${ig}`;
   const whatsappDigits = primaryWhatsAppDigits(brand);
 
+  const categoryGridClass =
+    categories.length === 1
+      ? "grid grid-cols-1 gap-2.5 px-4"
+      : publicMode
+        ? "grid grid-cols-2 gap-2.5 px-4 lg:grid-cols-3 lg:gap-3 lg:px-5"
+        : "grid grid-cols-2 gap-2.5 px-4";
+  const productGridClass = publicMode
+    ? "grid grid-cols-2 gap-2.5 px-4 lg:grid-cols-4 lg:gap-3 lg:px-5"
+    : "grid grid-cols-2 gap-2.5 px-4";
+
   return (
     <div className="pb-8">
-      <div className="relative h-[160px] overflow-hidden">
+      <div
+        className={`relative overflow-hidden ${
+          publicMode ? "h-[160px] lg:h-[240px]" : "h-[160px]"
+        }`}
+      >
         {brand.banner ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -689,7 +730,13 @@ function HomeView({
           </>
         ) : (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-            <div className="text-[28px] font-bold tracking-[0.06em]">{storeName}</div>
+            <div
+              className={`font-bold tracking-[0.06em] ${
+                publicMode ? "text-[28px] lg:text-[40px]" : "text-[28px]"
+              }`}
+            >
+              {storeName}
+            </div>
             <div className="mt-1 text-[13px]" style={{ color: colors.accent }}>
               Atacado de moda • Catálogo digital
             </div>
@@ -714,10 +761,10 @@ function HomeView({
           pressedId={pressedId}
           onPress={onPressProduct}
           onOpen={onOpenProduct}
-          className="grid grid-cols-2 gap-2.5 px-4"
+          className={productGridClass}
         />
       ) : (
-        <div className={`grid gap-2.5 px-4 ${categories.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+        <div className={categoryGridClass}>
           {categories.map((cat) => (
             <button
               type="button"
@@ -777,11 +824,13 @@ function HomeView({
 
       {videoPosition === "after-categories" && video}
 
-      <div className="px-4 pt-5">
+      <div className={`px-4 pt-5 ${publicMode ? "lg:px-5" : ""}`}>
         <button
           type="button"
           onClick={onOpenCart}
-          className="flex h-14 w-full items-center justify-center rounded-[12px] text-[15px] font-semibold text-white transition hover:brightness-110 active:scale-[0.98]"
+          className={`flex h-14 w-full items-center justify-center rounded-[12px] text-[15px] font-semibold text-white transition hover:brightness-110 active:scale-[0.98] ${
+            publicMode ? "lg:mx-auto lg:max-w-md" : ""
+          }`}
           style={{ background: brand.checkoutButtonColor ?? "#25D366" }}
         >
           {brand.checkoutButtonText?.trim() || "Finalizar pedido"}
@@ -1034,7 +1083,7 @@ function ProductSheet({
   const theme = catalogTheme(colors);
   const overlayClass = publicMode ? "fixed inset-0 z-40" : "absolute inset-0 z-40";
   const sheetClass = publicMode
-    ? "sheet-up absolute bottom-0 left-0 right-0 mx-auto w-full max-w-[480px] overflow-y-auto"
+    ? "sheet-up desktop-product-modal absolute bottom-0 left-0 right-0 mx-auto w-full max-h-[92vh] max-w-[480px] overflow-y-auto rounded-t-[20px] lg:bottom-auto lg:left-1/2 lg:right-auto lg:top-[5vh] lg:max-h-[min(90vh,860px)] lg:w-[min(980px,92vw)] lg:max-w-[980px] lg:-translate-x-1/2 lg:overflow-hidden lg:rounded-[20px]"
     : "sheet-up absolute bottom-0 left-0 right-0 overflow-y-auto";
 
   return (
@@ -1050,14 +1099,24 @@ function ProductSheet({
         className={sheetClass}
         style={{
           background: colors.primary,
-          borderRadius: "20px 20px 0 0",
-          maxHeight: "92vh",
+          borderRadius: publicMode ? undefined : "20px 20px 0 0",
+          maxHeight: publicMode ? undefined : "92vh",
           paddingBottom: "env(safe-area-inset-bottom)",
           color: colors.text,
         }}
       >
-        <div className="mx-auto mt-[10px] h-1 w-9 rounded-[2px]" style={{ background: theme.handle }} />
-        <div className="relative mt-3 h-[320px] bg-black">
+        <div
+          className={`mx-auto mt-[10px] h-1 w-9 rounded-[2px] ${publicMode ? "lg:hidden" : ""}`}
+          style={{ background: theme.handle }}
+        />
+        <div className={publicMode ? "lg:flex lg:max-h-[min(90vh,860px)] lg:min-h-0" : undefined}>
+        <div
+          className={`relative mt-3 h-[320px] bg-black ${
+            publicMode
+              ? "lg:mt-0 lg:h-auto lg:min-h-[560px] lg:w-[52%] lg:max-h-[min(90vh,860px)] lg:shrink-0"
+              : ""
+          }`}
+        >
           {current?.kind === "video" && isFileVideo ? (
             <video
               key={current.src}
@@ -1168,12 +1227,27 @@ function ProductSheet({
           </div>
         </div>
 
-        <div className="px-4 pb-[calc(env(safe-area-inset-bottom)+32px)] pt-4">
+        <div
+          className={`px-4 pb-[calc(env(safe-area-inset-bottom)+32px)] pt-4 ${
+            publicMode
+              ? "lg:max-h-[min(90vh,860px)] lg:flex-1 lg:overflow-y-auto lg:px-6 lg:pb-8 lg:pt-6"
+              : ""
+          }`}
+        >
           <div className="text-[11px] uppercase tracking-[0.06em]" style={{ color: theme.faint }}>
             {product.category}
           </div>
-          <h2 className="mt-1 text-[20px] font-bold leading-[1.2]">{product.name}</h2>
-          <div className="mt-2 text-[24px] font-bold" style={{ color: colors.accent }}>
+          <h2
+            className={`mt-1 font-bold leading-[1.2] ${
+              publicMode ? "text-[20px] lg:text-[26px]" : "text-[20px]"
+            }`}
+          >
+            {product.name}
+          </h2>
+          <div
+            className={`mt-2 font-bold ${publicMode ? "text-[24px] lg:text-[28px]" : "text-[24px]"}`}
+            style={{ color: colors.accent }}
+          >
             {hasTierPrice ? (
               <span className="flex flex-wrap items-baseline gap-2">
                 <span className="text-[16px] font-medium line-through" style={{ color: theme.muted }}>
@@ -1543,10 +1617,15 @@ function ProductSheet({
             Adicionar ao carrinho{pendingPieces > 0 ? ` (${pendingPieces})` : ""}
           </button>
         </div>
+        </div>
       </div>
 
       {confirmOpen && (
-        <div className="absolute inset-0 z-50 flex items-end justify-center p-4">
+        <div
+          className={`absolute inset-0 z-50 flex justify-center p-4 ${
+            publicMode ? "items-end lg:items-center" : "items-end"
+          }`}
+        >
           <button
             type="button"
             className="absolute inset-0"
@@ -1620,7 +1699,11 @@ function ProductSheet({
       )}
 
       {successOpen && (
-        <div className="absolute inset-0 z-[60] flex items-end justify-center p-4">
+        <div
+          className={`absolute inset-0 z-[60] flex justify-center p-4 ${
+            publicMode ? "items-end lg:items-center" : "items-end"
+          }`}
+        >
           <button
             type="button"
             className="absolute inset-0"
@@ -2010,7 +2093,7 @@ function CartSheet({
   } as const;
   const overlayClass = publicMode ? "fixed inset-0 z-50" : "absolute inset-0 z-40";
   const sheetClass = publicMode
-    ? "sheet-up absolute inset-x-0 bottom-0 mx-auto flex h-[100dvh] w-full max-w-[480px] flex-col overflow-hidden sm:h-[92vh] sm:max-h-[92vh] sm:rounded-t-[20px]"
+    ? "sheet-up desktop-cart-panel absolute inset-x-0 bottom-0 mx-auto flex h-[100dvh] w-full max-w-[480px] flex-col overflow-hidden sm:h-[92vh] sm:max-h-[92vh] sm:rounded-t-[20px] lg:inset-y-0 lg:right-0 lg:left-auto lg:mx-0 lg:h-full lg:max-h-none lg:w-[440px] lg:max-w-[440px] lg:rounded-none lg:rounded-l-[20px]"
     : "sheet-up absolute bottom-0 left-0 right-0 flex max-h-[92vh] flex-col overflow-hidden";
 
   return (
@@ -2030,9 +2113,15 @@ function CartSheet({
           color: colors.text,
         }}
       >
-        <div className="mx-auto mt-[10px] h-1 w-9 rounded-[2px]" style={{ background: theme.handle }} />
+        <div
+          className={`mx-auto mt-[10px] h-1 w-9 rounded-[2px] ${publicMode ? "lg:hidden" : ""}`}
+          style={{ background: theme.handle }}
+        />
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-4">
+        <div
+          ref={scrollRef}
+          className={`flex-1 overflow-y-auto px-4 pb-4 ${publicMode ? "lg:px-5 lg:pt-2" : ""}`}
+        >
           <div className="flex items-center justify-between gap-3 pt-2">
             <h2 className="text-[22px] font-bold" style={{ color: colors.accent }}>
               Carrinho

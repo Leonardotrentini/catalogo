@@ -80,6 +80,36 @@ input[type="color"]::-webkit-color-swatch-wrapper {
   animation: sheet-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+@keyframes desktop-modal-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes desktop-cart-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (min-width: 1024px) {
+  .desktop-product-modal.sheet-up {
+    animation: desktop-modal-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .desktop-cart-panel.sheet-up {
+    animation: desktop-cart-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
 @keyframes pulse-soft {
   0%,
   100% {
